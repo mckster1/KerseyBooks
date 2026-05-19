@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KerseyBooks</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  /* ── Base ─────────────────────────────────────────────── */
+  body { font-family: 'Segoe UI', system-ui, sans-serif; }
+
+  /* ── Tab panels ───────────────────────────────────────── */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Nav buttons: no heavy fill, just a colored underline ── */
+  .tab-btn { transition: color .12s, background-color .12s, border-color .12s; }
+
+  /* Per-tab active: each tab owns its color identity */
+  #tab-btn-dashboard.active    { color:#1d4ed8; border-bottom-color:#1d4ed8; background:#eff6ff; }
+  #tab-btn-transactions.active { color:#065f46; border-bottom-color:#065f46; background:#ecfdf5; }
+  #tab-btn-journal.active      { color:#1e293b; border-bottom-color:#1e293b; background:#f1f5f9; }
+  #tab-btn-reports.active      { color:#5b21b6; border-bottom-color:#5b21b6; background:#f5f3ff; }
+  #tab-btn-accounts.active     { color:#92400e; border-bottom-color:#92400e; background:#fffbeb; }
+  #tab-btn-import.active       { color:#0f766e; border-bottom-color:#0f766e; background:#f0fdfa; }
+  #tab-btn-ask.active          { color:#9f1239; border-bottom-color:#9f1239; background:#fff1f2; }
+  #tab-btn-settings.active     { color:#374151; border-bottom-color:#374151; background:#f9fafb; }
+
+  /* Per-tab heading color (h2 picks up its tab's accent) */
+  #tab-dashboard    h2 { color: #1e40af; }
+  #tab-transactions h2 { color: #065f46; }
+  #tab-journal      h2 { color: #1e293b; }
+  #tab-reports      h2 { color: #5b21b6; }
+  #tab-accounts     h2 { color: #92400e; }
+  #tab-import       h2 { color: #0f766e; }
+  #tab-ask          h2 { color: #9f1239; }
+  #tab-settings     h2 { color: #374151; }
+
+  /* Main content area transitions smoothly as tabs change */
+  main { transition: background-color .18s ease, border-top-color .18s ease; border-top: 3px solid #1d4ed8; }
+
+  /* ── DBA badges ──────────────────────────────────────── */
+  .dba-carwash    { background: #dbeafe; color: #1e40af; }
+  .dba-laundromat { background: #fce7f3; color: #9d174d; }
+  .dba-shared     { background: #dcfce7; color: #166534; }
+  .dba-both       { background: #fef9c3; color: #854d0e; }
+
+  /* ── Inputs ──────────────────────────────────────────── */
+  input, select, textarea { outline: none; }
+  input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 2px #6366f1; border-color: transparent; }
+
+  /* ── Modals ──────────────────────────────────────────── */
+  .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.5); z-index:50; display:flex; align-items:center; justify-content:center; }
+  .modal { background:#fff; border-radius:.875rem; padding:1.75rem; max-width:700px; width:95vw; max-height:90vh; overflow-y:auto; box-shadow: 0 25px 60px rgba(15,23,42,.25), 0 0 0 1px rgba(15,23,42,.08); }
+
+  /* ── Drop zone ───────────────────────────────────────── */
+  .drop-zone { border: 2px dashed #5eead4; border-radius:.625rem; padding:3rem; text-align:center; cursor:pointer; transition:background .15s, border-color .15s; }
+  .drop-zone:hover, .drop-zone.dragover { background:#f0fdfa; border-color:#0d9488; }
+
+  /* ── Amount colors ───────────────────────────────────── */
+  .amount-pos { color: #15803d; }
+  .amount-neg { color: #dc2626; }
+
+  /* ── Card polish ─────────────────────────────────────── */
+  .bg-white { box-shadow: 0 1px 3px rgba(15,23,42,.07), 0 0 0 1px rgba(15,23,42,.04); }
+
+  /* ── Table row hover ─────────────────────────────────── */
+  tbody tr:hover { background-color: rgba(0,0,0,.025) !important; }
+
+  /* ── Subtle section headings in tables ───────────────── */
+  thead th { letter-spacing: .04em; }
+</style>
+</head>
+<body class="bg-slate-200 min-h-screen">
+
+<!-- Header -->
+<header class="bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-lg sticky top-0 z-40">
+  <div class="flex items-center gap-3">
+    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
+    </svg>
+    <div>
+      <span class="font-bold text-base tracking-tight">KerseyBooks</span>
+      <span class="text-slate-400 text-xs ml-2 hidden sm:inline">Kersey Car Wash &amp; Laundromat</span>
+    </div>
+  </div>
+  <div class="flex items-center gap-3 text-sm">
+    <span id="db-status" class="text-emerald-400 text-xs font-medium"></span>
+    <button onclick="downloadBackup()" class="bg-slate-700 hover:bg-slate-600 border border-slate-600 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">Backup DB</button>
+  </div>
+</header>
+
+<!-- Tab Nav -->
+<nav class="bg-white border-b border-gray-200 sticky top-12 z-30 overflow-x-auto">
+  <div class="flex min-w-max">
+    <button onclick="showTab('dashboard')" id="tab-btn-dashboard"
+      class="tab-btn active flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V6zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V6zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+      Dashboard
+    </button>
+    <button onclick="showTab('transactions')" id="tab-btn-transactions"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      Transactions
+    </button>
+    <button onclick="showTab('journal')" id="tab-btn-journal"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      Journal Entries
+    </button>
+    <button onclick="showTab('reports')" id="tab-btn-reports"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Reports
+    </button>
+    <button onclick="showTab('accounts')" id="tab-btn-accounts"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+      Accounts
+    </button>
+    <button onclick="showTab('import')" id="tab-btn-import"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      Import
+    </button>
+    <button onclick="showTab('ask')" id="tab-btn-ask"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      Ask Claude
+    </button>
+    <button onclick="showTab('settings')" id="tab-btn-settings"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Settings
+    </button>
+  </div>
+</nav>
+
+<main class="p-4 max-w-7xl mx-auto" style="background:#eff6ff; border-top:3px solid #1d4ed8;">
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<div id="tab-dashboard" class="tab-panel active">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h2 class="text-xl font-bold text-gray-800">Dashboard</h2>
+    <div class="flex gap-2">
+      <select id="dash-dba" onchange="loadDashboard()" class="text-sm border rounded px-2 py-1">
+        <option value="all">All DBAs</option>
+        <option value="carwash">Car Wash</option>
+        <option value="laundromat">Laundromat</option>
+        <option value="shared">Shared</option>
+      </select>
+      <button onclick="openJournalModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded font-medium">+ Add Entry</button>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">This Month Income</p>
+      <p id="kpi-income" class="text-2xl font-bold text-green-600">—</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">This Month Expenses</p>
+      <p id="kpi-expenses" class="text-2xl font-bold text-red-500">—</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">Net Income (MTD)</p>
+      <p id="kpi-net" class="text-2xl font-bold text-blue-700">—</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">Cash Balance</p>
+      <p id="kpi-cash" class="text-2xl font-bold text-gray-800">—</p>
+    </div>
+  </div>
+
+  <!-- Recent Entries -->
+  <div class="bg-white rounded-xl shadow">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h3 class="font-semibold text-gray-700">Recent Journal Entries</h3>
+      <button onclick="showTab('journal')" class="text-blue-600 text-sm hover:underline">View all →</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+          <tr>
+            <th class="px-4 py-2 text-left">Date</th>
+            <th class="px-4 py-2 text-left">Description</th>
+            <th class="px-4 py-2 text-left">DBA</th>
+            <th class="px-4 py-2 text-right">Debits</th>
+            <th class="px-4 py-2 text-right">Credits</th>
+          </tr>
+        </thead>
+        <tbody id="dash-entries" class="divide-y">
+          <tr><td colspan="5" class="text-center py-8 text-gray-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TRANSACTIONS ═══════════════════ -->
+<div id="tab-transactions" class="tab-panel">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h2 class="text-xl font-bold text-gray-800">Transactions / Journal Entries</h2>
+    <button onclick="openJournalModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded font-medium">+ New Journal Entry</button>
+  </div>
+  <!-- Filters -->
+  <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3">
+    <input type="date" id="tx-start" class="border rounded px-2 py-1.5 text-sm" onchange="loadTransactions()">
+    <input type="date" id="tx-end"   class="border rounded px-2 py-1.5 text-sm" onchange="loadTransactions()">
+    <select id="tx-dba" onchange="loadTransactions()" class="border rounded px-2 py-1.5 text-sm">
+      <option value="all">All DBAs</option>
+      <option value="carwash">Car Wash</option>
+      <option value="laundromat">Laundromat</option>
+      <option value="shared">Shared</option>
+      <option value="both">Both</option>
+    </select>
+    <select id="tx-account" onchange="loadTransactions()" class="border rounded px-2 py-1.5 text-sm">
+      <option value="">All Accounts</option>
+    </select>
+    <button onclick="clearTxFilters()" class="text-sm text-gray-500 hover:text-gray-800">Clear</button>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+          <tr>
+            <th class="px-4 py-2 text-left">Date</th>
+            <th class="px-4 py-2 text-left">Description</th>
+            <th class="px-4 py-2 text-left">DBA</th>
+            <th class="px-4 py-2 text-left">Reference</th>
+            <th class="px-4 py-2 text-right">Total</th>
+            <th class="px-4 py-2 text-center">Lines</th>
+            <th class="px-4 py-2"></th>
+          </tr>
+        </thead>
+        <tbody id="tx-body" class="divide-y">
+          <tr><td colspan="7" class="text-center py-8 text-gray-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div id="tx-load-more-wrap" class="hidden text-center mt-3">
+    <button onclick="loadTransactions(true)" class="border border-gray-300 hover:bg-gray-50 text-gray-600 text-sm px-5 py-2 rounded">Load more</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ JOURNAL ENTRIES ═══════════════════ -->
+<div id="tab-journal" class="tab-panel">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-bold text-gray-800">Journal Entries</h2>
+    <button onclick="openJournalModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded font-medium">+ New Entry</button>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+          <tr>
+            <th class="px-4 py-2 text-left">Date</th>
+            <th class="px-4 py-2 text-left">Description</th>
+            <th class="px-4 py-2 text-left">DBA</th>
+            <th class="px-4 py-2 text-left">Ref</th>
+            <th class="px-4 py-2 text-right">Debits</th>
+            <th class="px-4 py-2 text-right">Credits</th>
+            <th class="px-4 py-2"></th>
+          </tr>
+        </thead>
+        <tbody id="je-body" class="divide-y">
+          <tr><td colspan="7" class="text-center py-8 text-gray-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div id="je-load-more-wrap" class="hidden text-center mt-3">
+    <button onclick="loadJournalEntries(true)" class="border border-gray-300 hover:bg-gray-50 text-gray-600 text-sm px-5 py-2 rounded">Load more</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ REPORTS ═══════════════════ -->
+<div id="tab-reports" class="tab-panel">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">Reports</h2>
+  <!-- Controls -->
+  <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs text-gray-500 mb-1">Report</label>
+      <select id="rpt-type" onchange="onReportTypeChange()" class="border rounded px-2 py-1.5 text-sm">
+        <option value="pl">Profit &amp; Loss</option>
+        <option value="balance-sheet">Balance Sheet</option>
+        <option value="cash-flow">Cash Flow</option>
+        <option value="expense-categories">Expense Categories</option>
+        <option value="month-over-month">Month-over-Month</option>
+      </select>
+    </div>
+    <div id="rpt-start-wrap">
+      <label class="block text-xs text-gray-500 mb-1">Start Date</label>
+      <input type="date" id="rpt-start" class="border rounded px-2 py-1.5 text-sm">
+    </div>
+    <div id="rpt-end-wrap">
+      <label class="block text-xs text-gray-500 mb-1">End Date</label>
+      <input type="date" id="rpt-end" class="border rounded px-2 py-1.5 text-sm">
+    </div>
+    <div id="rpt-asof-wrap" style="display:none">
+      <label class="block text-xs text-gray-500 mb-1">As of Date</label>
+      <input type="date" id="rpt-asof" class="border rounded px-2 py-1.5 text-sm">
+    </div>
+    <div id="rpt-year-wrap" style="display:none">
+      <label class="block text-xs text-gray-500 mb-1">Year</label>
+      <input type="number" id="rpt-year" class="border rounded px-2 py-1.5 text-sm w-24" value="2025">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-500 mb-1">DBA</label>
+      <select id="rpt-dba" class="border rounded px-2 py-1.5 text-sm">
+        <option value="all">All DBAs</option>
+        <option value="carwash">Car Wash</option>
+        <option value="laundromat">Laundromat</option>
+        <option value="shared">Shared</option>
+      </select>
+    </div>
+    <button onclick="runReport()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded font-medium">Run Report</button>
+    <button onclick="exportReportCSV()" class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm px-3 py-1.5 rounded">Export CSV</button>
+  </div>
+  <!-- Chart -->
+  <div id="rpt-chart-wrap" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+    <canvas id="rpt-chart" height="80"></canvas>
+  </div>
+  <!-- Table -->
+  <div id="rpt-output" class="bg-white rounded-xl shadow overflow-hidden">
+    <p class="text-center py-12 text-gray-400 text-sm">Select a report and click Run.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ ACCOUNTS ═══════════════════ -->
+<div id="tab-accounts" class="tab-panel">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-bold text-gray-800">Chart of Accounts</h2>
+    <button onclick="openAccountModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded font-medium">+ Add Account</button>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+          <tr>
+            <th class="px-4 py-2 text-left">Code</th>
+            <th class="px-4 py-2 text-left">Name</th>
+            <th class="px-4 py-2 text-left">Type</th>
+            <th class="px-4 py-2 text-left">Normal Balance</th>
+            <th class="px-4 py-2 text-center">Active</th>
+            <th class="px-4 py-2"></th>
+          </tr>
+        </thead>
+        <tbody id="acct-body" class="divide-y">
+          <tr><td colspan="6" class="text-center py-8 text-gray-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ IMPORT ═══════════════════ -->
+<div id="tab-import" class="tab-panel">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">Import CSV</h2>
+  <div class="bg-white rounded-xl shadow p-6 mb-4">
+    <p class="text-sm text-gray-600 mb-4">Upload a CSV from Patriot Software (GL export) or your bank. Supported formats: Date, Description, Debit, Credit — or Date, Description, Amount.</p>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-file').click()">
+      <svg class="w-10 h-10 mx-auto text-blue-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p class="text-gray-500">Drop CSV file here or <span class="text-blue-600 font-medium">browse</span></p>
+      <p class="text-xs text-gray-400 mt-1">Accepts .csv files</p>
+    </div>
+    <input type="file" id="csv-file" accept=".csv" class="hidden" onchange="handleFileSelect(event)">
+    <div class="mt-4 flex flex-wrap gap-3 items-end hidden" id="import-options">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Tag as DBA</label>
+        <select id="import-dba" class="border rounded px-2 py-1.5 text-sm">
+          <option value="shared">Shared</option>
+          <option value="carwash">Car Wash</option>
+          <option value="laundromat">Laundromat</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Default Account</label>
+        <select id="import-account" class="border rounded px-2 py-1.5 text-sm">
+          <option value="">— Select Account —</option>
+        </select>
+      </div>
+      <button onclick="doImport()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded font-medium">Import</button>
+    </div>
+  </div>
+  <div id="import-preview" class="bg-white rounded-xl shadow p-4 hidden">
+    <h3 class="font-semibold text-gray-700 mb-3">Preview (first 10 rows)</h3>
+    <div class="overflow-x-auto" id="import-preview-table"></div>
+  </div>
+  <div id="import-result" class="hidden mt-4 p-4 rounded-xl text-sm"></div>
+</div>
+
+<!-- ═══════════════════ ASK CLAUDE ═══════════════════ -->
+<div id="tab-ask" class="tab-panel">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">Ask Claude</h2>
+  <div class="bg-white rounded-xl shadow p-6">
+    <p class="text-sm text-gray-600 mb-4">Ask a plain-English question about your books. Claude has access to your account balances and transactions for the selected date range.</p>
+    <div class="flex flex-wrap gap-3 mb-4">
+      <input type="date" id="ask-start" class="border rounded px-2 py-1.5 text-sm">
+      <input type="date" id="ask-end"   class="border rounded px-2 py-1.5 text-sm">
+      <select id="ask-dba" class="border rounded px-2 py-1.5 text-sm">
+        <option value="all">All DBAs</option>
+        <option value="carwash">Car Wash</option>
+        <option value="laundromat">Laundromat</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <div class="flex flex-wrap gap-2 mb-2">
+        <button onclick="setQuestion('What was my net income this year?')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full">Net income this year?</button>
+        <button onclick="setQuestion('Which expense category is highest?')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full">Highest expense?</button>
+        <button onclick="setQuestion('How does Car Wash revenue compare to Laundromat?')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full">Revenue by DBA?</button>
+        <button onclick="setQuestion('What are my total wages for the period?')" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full">Total wages?</button>
+      </div>
+      <textarea id="ask-question" rows="3" placeholder="E.g. What were my total utilities expenses for the first quarter?" class="w-full border rounded px-3 py-2 text-sm resize-none"></textarea>
+    </div>
+    <button onclick="askClaude()" id="ask-btn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded font-medium">Ask Claude</button>
+    <div id="ask-loading" class="hidden mt-4 text-gray-400 text-sm animate-pulse">Thinking…</div>
+    <div id="ask-answer" class="hidden mt-4 p-4 bg-blue-50 rounded-xl text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SETTINGS ═══════════════════ -->
+<div id="tab-settings" class="tab-panel">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">Settings</h2>
+  <div class="grid gap-4 max-w-2xl">
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-semibold text-gray-700 mb-3">Claude API Key</h3>
+      <p class="text-sm text-gray-500 mb-3">Required for the Ask Claude tab. Saved to the database — no need to edit .env manually.</p>
+      <div class="flex gap-2">
+        <input type="password" id="settings-api-key" placeholder="sk-ant-..." class="flex-1 border rounded px-3 py-2 text-sm">
+        <button onclick="saveApiKey()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save</button>
+      </div>
+      <p id="api-key-status" class="text-xs mt-2 text-gray-500"></p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-semibold text-gray-700 mb-3">Database Backup</h3>
+      <p class="text-sm text-gray-500 mb-3">Downloads your kersey.db file. Keep copies regularly — this is your only data store.</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadBackup()" class="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded">Download Backup</button>
+        <button onclick="downloadAndOpenDrive()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Download + Open Google Drive</button>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Google Drive account: kerseywash@gmail.com</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-semibold text-gray-700 mb-3">API Base URL</h3>
+      <p class="text-sm text-gray-500 mb-3">The backend server address. Default: http://localhost:8001</p>
+      <div class="flex gap-2">
+        <input type="text" id="settings-api-url" class="flex-1 border rounded px-3 py-2 text-sm font-mono" value="http://localhost:8001">
+        <button onclick="saveApiUrl()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- ═══════════════════ JOURNAL ENTRY MODAL ═══════════════════ -->
+<div id="modal-je" class="modal-bg hidden" onclick="if(event.target===this) closeModal('modal-je')">
+  <div class="modal">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-gray-800" id="je-modal-title">New Journal Entry</h3>
+      <button onclick="closeModal('modal-je')" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+    </div>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Date *</label>
+        <input type="date" id="je-date" class="w-full border rounded px-2 py-1.5 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">DBA *</label>
+        <select id="je-dba" class="w-full border rounded px-2 py-1.5 text-sm">
+          <option value="carwash">Car Wash</option>
+          <option value="laundromat">Laundromat</option>
+          <option value="shared">Shared</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+      <div class="col-span-2">
+        <label class="block text-xs text-gray-500 mb-1">Description *</label>
+        <input type="text" id="je-description" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="E.g. Monthly utilities payment">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Reference / Check #</label>
+        <input type="text" id="je-reference" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="Optional">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Memo</label>
+        <input type="text" id="je-memo" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="Optional">
+      </div>
+    </div>
+
+    <!-- Journal Lines -->
+    <div class="mb-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Journal Lines</span>
+        <button onclick="addJournalLine()" class="text-blue-600 text-xs hover:underline">+ Add Line</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-xs text-gray-500">
+            <tr>
+              <th class="px-2 py-1 text-left">Account</th>
+              <th class="px-2 py-1 text-right w-28">Debit</th>
+              <th class="px-2 py-1 text-right w-28">Credit</th>
+              <th class="px-2 py-1 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="je-lines"></tbody>
+          <tfoot>
+            <tr class="border-t-2 border-gray-300 font-semibold text-sm">
+              <td class="px-2 py-2 text-gray-600">Totals</td>
+              <td class="px-2 py-2 text-right text-green-700" id="je-total-debit">0.00</td>
+              <td class="px-2 py-2 text-right text-red-600"   id="je-total-credit">0.00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p id="je-balance-error" class="text-red-500 text-xs mt-1 hidden">⚠ Debits must equal Credits</p>
+    </div>
+
+    <div class="flex gap-3 justify-end mt-4">
+      <button onclick="closeModal('modal-je')" class="border border-gray-300 px-4 py-2 rounded text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+      <button onclick="submitJournalEntry()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded text-sm font-medium">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ ACCOUNT MODAL ═══════════════════ -->
+<div id="modal-account" class="modal-bg hidden" onclick="if(event.target===this) closeModal('modal-account')">
+  <div class="modal max-w-md">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-gray-800">Add Account</h3>
+      <button onclick="closeModal('modal-account')" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+    </div>
+    <div class="grid gap-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Account Code *</label>
+          <input type="text" id="acct-code" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="e.g. 5140">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Type *</label>
+          <select id="acct-type" onchange="setNormalBalance()" class="w-full border rounded px-2 py-1.5 text-sm">
+            <option value="asset">Asset</option>
+            <option value="liability">Liability</option>
+            <option value="equity">Equity</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Account Name *</label>
+        <input type="text" id="acct-name" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="e.g. Equipment Depreciation">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Normal Balance *</label>
+        <select id="acct-normal" class="w-full border rounded px-2 py-1.5 text-sm">
+          <option value="debit">Debit</option>
+          <option value="credit">Credit</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-3 justify-end mt-4">
+      <button onclick="closeModal('modal-account')" class="border border-gray-300 px-4 py-2 rounded text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+      <button onclick="submitAccount()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded text-sm font-medium">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ ENTRY DETAIL MODAL ═══════════════════ -->
+<div id="modal-entry-detail" class="modal-bg hidden" onclick="if(event.target===this) closeModal('modal-entry-detail')">
+  <div class="modal">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-gray-800">Journal Entry Detail</h3>
+      <button onclick="closeModal('modal-entry-detail')" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+    </div>
+    <div id="entry-detail-content"></div>
+    <div class="flex gap-3 justify-end mt-4">
+      <button onclick="deleteEntry()" id="btn-delete-entry" class="border border-red-300 text-red-600 hover:bg-red-50 px-4 py-2 rounded text-sm">Delete</button>
+      <button onclick="editEntry()" class="border border-blue-300 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded text-sm">Edit</button>
+      <button onclick="closeModal('modal-entry-detail')" class="border border-gray-300 px-4 py-2 rounded text-sm text-gray-700 hover:bg-gray-50">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-4 right-4 z-50 hidden">
+  <div id="toast-inner" class="px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium"></div>
+</div>
+
+<script>
+// ═══════════════ STATE ═══════════════
+let API_BASE = localStorage.getItem('api_base') || 'http://localhost:8001';
+let accounts = [];
+let currentEntryId = null;
+let reportData = null;
+let rptChart = null;
+let csvFile = null;
+let importTabInited = false;
+const PAGE_SIZE = 50;
+let jeOffset = 0;
+let txOffset = 0;
+let editingEntryId = null;  // null = new entry, number = editing existing
+
+// ═══════════════ UTILITIES ═══════════════
+function $(id) { return document.getElementById(id); }
+
+function toast(msg, type='success') {
+  const el = $('toast'), inner = $('toast-inner');
+  inner.textContent = msg;
+  inner.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium ${type==='error' ? 'bg-red-600' : 'bg-green-600'}`;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 3500);
+}
+
+function fmt(n) {
+  if (n == null) return '—';
+  const v = parseFloat(n);
+  const cls = v >= 0 ? 'amount-pos' : 'amount-neg';
+  return `<span class="${cls}">$${Math.abs(v).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+}
+
+function fmtPlain(n) {
+  if (n == null) return '—';
+  const v = parseFloat(n);
+  return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function dbaBadge(dba) {
+  const labels = {carwash:'Car Wash',laundromat:'Laundromat',shared:'Shared',both:'Both'};
+  return `<span class="dba-${dba} text-xs font-medium px-2 py-0.5 rounded-full">${labels[dba]||dba}</span>`;
+}
+
+async function apiFetch(path, options={}) {
+  const url = API_BASE + path;
+  const r = await fetch(url, {headers:{'Content-Type':'application/json'}, ...options});
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { const e = await r.json(); msg = e.detail || JSON.stringify(e); } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function monthStart() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+}
+
+// ═══════════════ TABS ═══════════════
+// Each tab has a distinct background tint + accent stripe so the page
+// looks visually different — helps avoid data-entry confusion.
+const TAB_THEME = {
+  dashboard:    { bg: '#eff6ff', accent: '#1d4ed8' },  // blue
+  transactions: { bg: '#ecfdf5', accent: '#065f46' },  // emerald
+  journal:      { bg: '#f1f5f9', accent: '#1e293b' },  // slate
+  reports:      { bg: '#f5f3ff', accent: '#5b21b6' },  // violet
+  accounts:     { bg: '#fffbeb', accent: '#92400e' },  // amber
+  import:       { bg: '#f0fdfa', accent: '#0f766e' },  // teal
+  ask:          { bg: '#fff1f2', accent: '#9f1239' },  // rose
+  settings:     { bg: '#f9fafb', accent: '#374151' },  // gray
+};
+
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  $('tab-' + name).classList.add('active');
+  $('tab-btn-' + name).classList.add('active');
+
+  // Shift the entire content area to the tab's color identity
+  const theme = TAB_THEME[name] || { bg: '#f8fafc', accent: '#374151' };
+  const mainEl = document.querySelector('main');
+  mainEl.style.backgroundColor = theme.bg;
+  mainEl.style.borderTopColor  = theme.accent;
+
+  const loaders = {
+    dashboard:    loadDashboard,
+    transactions: loadTransactions,
+    journal:      loadJournalEntries,
+    accounts:     loadAccounts,
+    reports:      null,
+    import:       loadImportTab,
+    ask:          null,
+    settings:     loadSettingsTab,
+  };
+  if (loaders[name]) loaders[name]();
+}
+
+// ═══════════════ ACCOUNTS ═══════════════
+async function fetchAccounts() {
+  accounts = await apiFetch('/api/accounts');
+  populateAccountSelects();
+}
+
+function populateAccountSelects() {
+  const selects = ['#tx-account', '#import-account'];
+  selects.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    const first = el.options[0];
+    el.innerHTML = '';
+    el.appendChild(first);
+    accounts.forEach(a => {
+      const opt = new Option(`${a.code} — ${a.name}`, a.id);
+      el.appendChild(opt);
+    });
+  });
+  // Journal line selects are built dynamically
+}
+
+async function loadAccounts() {
+  await fetchAccounts();
+  const tbody = $('acct-body');
+  tbody.innerHTML = accounts.map(a => `
+    <tr class="hover:bg-gray-50">
+      <td class="px-4 py-2 font-mono text-gray-700">${a.code}</td>
+      <td class="px-4 py-2">${a.name}</td>
+      <td class="px-4 py-2 capitalize">${a.type}</td>
+      <td class="px-4 py-2 capitalize">${a.normal_balance}</td>
+      <td class="px-4 py-2 text-center">${a.active ? '✓' : ''}</td>
+      <td class="px-4 py-2 text-right">
+        <button onclick="toggleActive(${a.id},${a.active})" class="text-xs text-gray-400 hover:text-gray-700">${a.active ? 'Deactivate' : 'Activate'}</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function toggleActive(id, current) {
+  await apiFetch(`/api/accounts/${id}`, {method:'PUT', body:JSON.stringify({active: !current})});
+  loadAccounts();
+}
+
+function openAccountModal() {
+  $('acct-code').value = '';
+  $('acct-name').value = '';
+  $('acct-type').value = 'expense';
+  $('acct-normal').value = 'debit';
+  $('modal-account').classList.remove('hidden');
+}
+
+function setNormalBalance() {
+  const type = $('acct-type').value;
+  $('acct-normal').value = (type === 'asset' || type === 'expense') ? 'debit' : 'credit';
+}
+
+async function submitAccount() {
+  const data = {
+    code: $('acct-code').value.trim(),
+    name: $('acct-name').value.trim(),
+    type: $('acct-type').value,
+    normal_balance: $('acct-normal').value,
+    active: true,
+  };
+  if (!data.code || !data.name) { toast('Code and Name are required','error'); return; }
+  try {
+    await apiFetch('/api/accounts', {method:'POST', body:JSON.stringify(data)});
+    closeModal('modal-account');
+    toast('Account created');
+    loadAccounts();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ═══════════════ DASHBOARD ═══════════════
+async function loadDashboard() {
+  const dba = $('dash-dba').value;
+  const start = monthStart(), end = today();
+  try {
+    const [pl, bs] = await Promise.all([
+      apiFetch(`/api/reports/pl?start=${start}&end=${end}&dba=${dba}`),
+      apiFetch(`/api/reports/balance-sheet?as_of=${end}&dba=${dba}`),
+    ]);
+    $('kpi-income').textContent   = fmtPlain(pl.total_income);
+    $('kpi-expenses').textContent = fmtPlain(pl.total_expenses);
+    $('kpi-net').textContent      = fmtPlain(pl.net_income);
+
+    const cashAcct = bs.assets.find(a => a.code === '1000');
+    $('kpi-cash').textContent = cashAcct ? fmtPlain(cashAcct.balance) : '—';
+
+    const entries = await apiFetch(`/api/journal-entries?limit=10&dba=${dba === 'all' ? '' : dba}`);
+    const tbody = $('dash-entries');
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">No entries yet — add your first journal entry!</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(e => {
+      const totalDebit  = e.lines.reduce((s,l)=>s+l.debit,0);
+      const totalCredit = e.lines.reduce((s,l)=>s+l.credit,0);
+      return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="viewEntry(${e.id})">
+        <td class="px-4 py-2 text-gray-600">${e.date}</td>
+        <td class="px-4 py-2">${e.description}</td>
+        <td class="px-4 py-2">${dbaBadge(e.dba)}</td>
+        <td class="px-4 py-2 text-right text-green-700">$${totalDebit.toFixed(2)}</td>
+        <td class="px-4 py-2 text-right text-red-600">$${totalCredit.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    $('dash-entries').innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-400">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// ═══════════════ TRANSACTIONS ═══════════════
+async function loadTransactions(append=false) {
+  if (!append) { txOffset = 0; }
+  const start   = $('tx-start').value;
+  const end     = $('tx-end').value;
+  const dba     = $('tx-dba').value;
+  const account = $('tx-account').value;
+  let url = `/api/journal-entries?limit=${PAGE_SIZE}&offset=${txOffset}`;
+  if (start)   url += `&start=${start}`;
+  if (end)     url += `&end=${end}`;
+  if (dba && dba !== 'all') url += `&dba=${dba}`;
+  if (account) url += `&account=${account}`;
+  const tbody = $('tx-body');
+  if (!append) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Loading…</td></tr>';
+  try {
+    const entries = await apiFetch(url);
+    if (!append && !entries.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No entries found</td></tr>';
+      $('tx-load-more-wrap').classList.add('hidden');
+      return;
+    }
+    const rows = entries.map(e => {
+      const total = e.lines.reduce((s,l)=>s+l.debit,0);
+      return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="viewEntry(${e.id})">
+        <td class="px-4 py-2 text-gray-600 whitespace-nowrap">${e.date}</td>
+        <td class="px-4 py-2">${e.description}</td>
+        <td class="px-4 py-2">${dbaBadge(e.dba)}</td>
+        <td class="px-4 py-2 text-gray-400 text-xs">${e.reference||''}</td>
+        <td class="px-4 py-2 text-right font-medium">$${total.toFixed(2)}</td>
+        <td class="px-4 py-2 text-center text-gray-400">${e.lines.length}</td>
+        <td class="px-4 py-2 text-right">
+          <button onclick="event.stopPropagation();viewEntry(${e.id})" class="text-blue-600 text-xs hover:underline">View</button>
+        </td>
+      </tr>`;
+    }).join('');
+    if (append) tbody.innerHTML += rows;
+    else        tbody.innerHTML  = rows;
+    txOffset += entries.length;
+    const wrap = $('tx-load-more-wrap');
+    if (entries.length === PAGE_SIZE) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function clearTxFilters() {
+  $('tx-start').value = $('tx-end').value = '';
+  $('tx-dba').value = 'all';
+  $('tx-account').value = '';
+  loadTransactions();
+}
+
+// ═══════════════ JOURNAL ENTRIES TAB ═══════════════
+async function loadJournalEntries(append=false) {
+  if (!append) { jeOffset = 0; }
+  const tbody = $('je-body');
+  if (!append) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Loading…</td></tr>';
+  try {
+    const entries = await apiFetch(`/api/journal-entries?limit=${PAGE_SIZE}&offset=${jeOffset}`);
+    if (!append && !entries.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No journal entries yet</td></tr>';
+      $('je-load-more-wrap').classList.add('hidden');
+      return;
+    }
+    const rows = entries.map(e => {
+      const dr = e.lines.reduce((s,l)=>s+l.debit,0);
+      const cr = e.lines.reduce((s,l)=>s+l.credit,0);
+      return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="viewEntry(${e.id})">
+        <td class="px-4 py-2 whitespace-nowrap">${e.date}</td>
+        <td class="px-4 py-2">${e.description}</td>
+        <td class="px-4 py-2">${dbaBadge(e.dba)}</td>
+        <td class="px-4 py-2 text-gray-400 text-xs">${e.reference||'—'}</td>
+        <td class="px-4 py-2 text-right text-green-700 font-mono">$${dr.toFixed(2)}</td>
+        <td class="px-4 py-2 text-right text-red-600 font-mono">$${cr.toFixed(2)}</td>
+        <td class="px-4 py-2 text-right">
+          <button onclick="event.stopPropagation();viewEntry(${e.id})" class="text-blue-600 text-xs hover:underline">Detail</button>
+        </td>
+      </tr>`;
+    }).join('');
+    if (append) tbody.innerHTML += rows;
+    else        tbody.innerHTML  = rows;
+    jeOffset += entries.length;
+    const wrap = $('je-load-more-wrap');
+    if (entries.length === PAGE_SIZE) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// ═══════════════ JOURNAL ENTRY MODAL ═══════════════
+function openJournalModal(entry=null) {
+  editingEntryId = entry ? entry.id : null;
+  $('je-modal-title').textContent = entry ? 'Edit Journal Entry' : 'New Journal Entry';
+  $('je-date').value        = entry ? entry.date        : today();
+  $('je-dba').value         = entry ? entry.dba         : 'carwash';
+  $('je-description').value = entry ? entry.description : '';
+  $('je-reference').value   = entry ? (entry.reference || '') : '';
+  $('je-memo').value        = entry ? (entry.memo || '')      : '';
+  $('je-lines').innerHTML = '';
+  lineCount = 0;
+  if (entry && entry.lines && entry.lines.length) {
+    entry.lines.forEach(l => addJournalLine(l.account_id, l.debit || '', l.credit || ''));
+  } else {
+    addJournalLine();
+    addJournalLine();
+  }
+  updateLineTotals();
+  $('modal-je').classList.remove('hidden');
+}
+
+function accountOptions(selectedId) {
+  return accounts.map(a =>
+    `<option value="${a.id}" ${a.id == selectedId ? 'selected' : ''}>${a.code} — ${a.name}</option>`
+  ).join('');
+}
+
+let lineCount = 0;
+function addJournalLine(accountId='', debit='', credit='') {
+  lineCount++;
+  const id = `line-${lineCount}`;
+  const row = document.createElement('tr');
+  row.id = id;
+  row.className = 'border-t';
+  row.innerHTML = `
+    <td class="px-1 py-1">
+      <select class="line-account w-full border rounded px-1 py-1 text-xs" onchange="updateLineTotals()">
+        <option value="">— Account —</option>
+        ${accountOptions(accountId)}
+      </select>
+    </td>
+    <td class="px-1 py-1">
+      <input type="number" step="0.01" min="0" class="line-debit w-full border rounded px-1 py-1 text-xs text-right font-mono" value="${debit}" placeholder="0.00" oninput="updateLineTotals()">
+    </td>
+    <td class="px-1 py-1">
+      <input type="number" step="0.01" min="0" class="line-credit w-full border rounded px-1 py-1 text-xs text-right font-mono" value="${credit}" placeholder="0.00" oninput="updateLineTotals()">
+    </td>
+    <td class="px-1 py-1 text-center">
+      <button onclick="document.getElementById('${id}').remove(); updateLineTotals()" class="text-gray-300 hover:text-red-500 text-lg leading-none">×</button>
+    </td>`;
+  $('je-lines').appendChild(row);
+}
+
+function updateLineTotals() {
+  let totalDebit = 0, totalCredit = 0;
+  document.querySelectorAll('.line-debit').forEach(el => totalDebit  += parseFloat(el.value)||0);
+  document.querySelectorAll('.line-credit').forEach(el => totalCredit += parseFloat(el.value)||0);
+  $('je-total-debit').textContent  = totalDebit.toFixed(2);
+  $('je-total-credit').textContent = totalCredit.toFixed(2);
+  const diff = Math.abs(totalDebit - totalCredit);
+  const err = $('je-balance-error');
+  if (diff > 0.005 && totalDebit > 0) { err.classList.remove('hidden'); }
+  else { err.classList.add('hidden'); }
+}
+
+async function submitJournalEntry() {
+  const lines = [];
+  const rows = $('je-lines').querySelectorAll('tr');
+  for (const row of rows) {
+    const accountId = row.querySelector('.line-account').value;
+    const debit     = parseFloat(row.querySelector('.line-debit').value) || 0;
+    const credit    = parseFloat(row.querySelector('.line-credit').value) || 0;
+    if (accountId && (debit > 0 || credit > 0)) {
+      lines.push({account_id: parseInt(accountId), debit, credit});
+    }
+  }
+  const data = {
+    date:        $('je-date').value,
+    description: $('je-description').value.trim(),
+    reference:   $('je-reference').value.trim() || null,
+    dba:         $('je-dba').value,
+    memo:        $('je-memo').value.trim() || null,
+    lines,
+  };
+  if (!data.date || !data.description) { toast('Date and Description are required','error'); return; }
+  try {
+    if (editingEntryId) {
+      await apiFetch(`/api/journal-entries/${editingEntryId}`, {method:'PUT', body:JSON.stringify(data)});
+      toast('Journal entry updated');
+    } else {
+      await apiFetch('/api/journal-entries', {method:'POST', body:JSON.stringify(data)});
+      toast('Journal entry saved');
+    }
+    closeModal('modal-je');
+    loadJournalEntries();
+    loadDashboard();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function viewEntry(id) {
+  currentEntryId = id;
+  try {
+    const e = await apiFetch(`/api/journal-entries/${id}`);
+    const totalDebit  = e.lines.reduce((s,l)=>s+l.debit,0);
+    const totalCredit = e.lines.reduce((s,l)=>s+l.credit,0);
+    $('entry-detail-content').innerHTML = `
+      <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
+        <dt class="text-gray-500">Date</dt>         <dd>${e.date}</dd>
+        <dt class="text-gray-500">Description</dt>  <dd class="font-medium">${e.description}</dd>
+        <dt class="text-gray-500">DBA</dt>          <dd>${dbaBadge(e.dba)}</dd>
+        <dt class="text-gray-500">Reference</dt>    <dd>${e.reference||'—'}</dd>
+        <dt class="text-gray-500">Memo</dt>         <dd>${e.memo||'—'}</dd>
+        <dt class="text-gray-500">Created</dt>      <dd class="text-xs text-gray-400">${e.created_at}</dd>
+      </dl>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm mb-2">
+          <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+            <tr>
+              <th class="px-3 py-2 text-left">Account</th>
+              <th class="px-3 py-2 text-right">Debit</th>
+              <th class="px-3 py-2 text-right">Credit</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            ${e.lines.map(l=>`
+              <tr>
+                <td class="px-3 py-1.5">${l.account_code} — ${l.account_name}</td>
+                <td class="px-3 py-1.5 text-right font-mono text-green-700">${l.debit>0?'$'+l.debit.toFixed(2):''}</td>
+                <td class="px-3 py-1.5 text-right font-mono text-red-600">${l.credit>0?'$'+l.credit.toFixed(2):''}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot class="border-t-2 border-gray-300 font-semibold">
+            <tr>
+              <td class="px-3 py-2 text-gray-600">Total</td>
+              <td class="px-3 py-2 text-right font-mono text-green-700">$${totalDebit.toFixed(2)}</td>
+              <td class="px-3 py-2 text-right font-mono text-red-600">$${totalCredit.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+    $('modal-entry-detail').classList.remove('hidden');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteEntry() {
+  if (!currentEntryId) return;
+  if (!confirm('Delete this journal entry? This cannot be undone.')) return;
+  try {
+    await fetch(`${API_BASE}/api/journal-entries/${currentEntryId}`, {method:'DELETE'});
+    closeModal('modal-entry-detail');
+    toast('Entry deleted');
+    loadJournalEntries();
+    loadDashboard();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function editEntry() {
+  if (!currentEntryId) return;
+  try {
+    const entry = await apiFetch(`/api/journal-entries/${currentEntryId}`);
+    closeModal('modal-entry-detail');
+    openJournalModal(entry);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ═══════════════ REPORTS ═══════════════
+function onReportTypeChange() {
+  const type = $('rpt-type').value;
+  const isBS     = type === 'balance-sheet';
+  const isMoM    = type === 'month-over-month';
+  $('rpt-start-wrap').style.display = (isBS || isMoM) ? 'none' : '';
+  $('rpt-end-wrap').style.display   = (isBS || isMoM) ? 'none' : '';
+  $('rpt-asof-wrap').style.display  = isBS  ? '' : 'none';
+  $('rpt-year-wrap').style.display  = isMoM ? '' : 'none';
+}
+
+async function runReport() {
+  const type = $('rpt-type').value;
+  const dba  = $('rpt-dba').value;
+  const out  = $('rpt-output');
+  out.innerHTML = '<p class="text-center py-8 text-gray-400">Loading…</p>';
+  $('rpt-chart-wrap').classList.add('hidden');
+
+  try {
+    let data;
+    switch(type) {
+      case 'pl': {
+        const s = $('rpt-start').value || monthStart();
+        const e = $('rpt-end').value   || today();
+        data = await apiFetch(`/api/reports/pl?start=${s}&end=${e}&dba=${dba}`);
+        renderPL(data);
+        break;
+      }
+      case 'balance-sheet': {
+        const asOf = $('rpt-asof').value || today();
+        data = await apiFetch(`/api/reports/balance-sheet?as_of=${asOf}&dba=${dba}`);
+        renderBS(data);
+        break;
+      }
+      case 'cash-flow': {
+        const s = $('rpt-start').value || monthStart();
+        const e = $('rpt-end').value   || today();
+        data = await apiFetch(`/api/reports/cash-flow?start=${s}&end=${e}&dba=${dba}`);
+        renderCF(data);
+        break;
+      }
+      case 'expense-categories': {
+        const s = $('rpt-start').value || monthStart();
+        const e = $('rpt-end').value   || today();
+        data = await apiFetch(`/api/reports/expense-categories?start=${s}&end=${e}&dba=${dba}`);
+        renderExpCat(data);
+        break;
+      }
+      case 'month-over-month': {
+        const yr = $('rpt-year').value || new Date().getFullYear();
+        data = await apiFetch(`/api/reports/month-over-month?year=${yr}&dba=${dba}`);
+        renderMoM(data);
+        break;
+      }
+    }
+    reportData = {type, data};
+  } catch(e) {
+    out.innerHTML = `<p class="text-center py-8 text-red-500">Error: ${e.message}</p>`;
+  }
+}
+
+function sectionHeader(title) {
+  return `<tr class="bg-blue-50"><td colspan="3" class="px-4 py-2 font-bold text-blue-800 uppercase text-xs tracking-widest">${title}</td></tr>`;
+}
+
+function renderPL(d) {
+  const out = $('rpt-output');
+  const rows = (items, cls) => items.map(i =>
+    `<tr class="hover:bg-gray-50">
+       <td class="px-4 py-1.5 pl-8 text-gray-600">${i.code}</td>
+       <td class="px-4 py-1.5">${i.name}</td>
+       <td class="px-4 py-1.5 text-right font-mono ${cls}">$${Math.abs(i.net).toFixed(2)}</td>
+     </tr>`
+  ).join('');
+
+  out.innerHTML = `
+    <div class="p-4">
+      <h3 class="text-lg font-bold text-gray-800 mb-1">Profit &amp; Loss</h3>
+      <p class="text-sm text-gray-500 mb-4">${d.start} to ${d.end} · ${d.dba}</p>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="text-xs text-gray-400 uppercase"><tr>
+        <th class="px-4 py-2 text-left w-20">Code</th>
+        <th class="px-4 py-2 text-left">Account</th>
+        <th class="px-4 py-2 text-right w-32">Amount</th>
+      </tr></thead>
+      <tbody>
+        ${sectionHeader('Income')}
+        ${rows(d.income,'text-green-700')}
+        <tr class="border-t font-semibold bg-green-50">
+          <td colspan="2" class="px-4 py-2 text-green-800">Total Income</td>
+          <td class="px-4 py-2 text-right font-mono text-green-700">$${d.total_income.toFixed(2)}</td>
+        </tr>
+        ${sectionHeader('Expenses')}
+        ${rows(d.expenses,'text-red-600')}
+        <tr class="border-t font-semibold bg-red-50">
+          <td colspan="2" class="px-4 py-2 text-red-800">Total Expenses</td>
+          <td class="px-4 py-2 text-right font-mono text-red-600">$${d.total_expenses.toFixed(2)}</td>
+        </tr>
+        <tr class="border-t-2 border-gray-400 font-bold bg-gray-100">
+          <td colspan="2" class="px-4 py-3 text-gray-800">Net Income</td>
+          <td class="px-4 py-3 text-right font-mono text-lg ${d.net_income >= 0 ? 'text-green-700' : 'text-red-600'}">$${d.net_income.toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+function renderBS(d) {
+  const out = $('rpt-output');
+  const rows = items => items.map(i =>
+    `<tr class="hover:bg-gray-50">
+       <td class="px-4 py-1.5 pl-8 text-gray-500">${i.code}</td>
+       <td class="px-4 py-1.5">${i.name}</td>
+       <td class="px-4 py-1.5 text-right font-mono">$${i.balance.toFixed(2)}</td>
+     </tr>`
+  ).join('');
+  const subtotal = (label, val, cls='') =>
+    `<tr class="border-t font-semibold ${cls}">
+       <td colspan="2" class="px-4 py-2">${label}</td>
+       <td class="px-4 py-2 text-right font-mono">$${val.toFixed(2)}</td>
+     </tr>`;
+
+  out.innerHTML = `
+    <div class="p-4">
+      <h3 class="text-lg font-bold text-gray-800 mb-1">Balance Sheet</h3>
+      <p class="text-sm text-gray-500 mb-4">As of ${d.as_of} · ${d.dba}
+        ${d.is_balanced ? '<span class="text-green-600 text-xs ml-2">✓ Balanced</span>' : '<span class="text-red-500 text-xs ml-2">⚠ Out of balance</span>'}
+      </p>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="text-xs text-gray-400 uppercase"><tr>
+        <th class="px-4 py-2 text-left w-20">Code</th>
+        <th class="px-4 py-2 text-left">Account</th>
+        <th class="px-4 py-2 text-right w-32">Balance</th>
+      </tr></thead>
+      <tbody>
+        ${sectionHeader('Assets')}${rows(d.assets)}${subtotal('Total Assets', d.total_assets,'bg-blue-50')}
+        ${sectionHeader('Liabilities')}${rows(d.liabilities)}${subtotal('Total Liabilities', d.total_liabilities,'bg-orange-50')}
+        ${sectionHeader('Equity')}${rows(d.equity)}${subtotal('Total Equity', d.total_equity,'bg-purple-50')}
+        <tr class="border-t-2 border-gray-400 font-bold bg-gray-100">
+          <td colspan="2" class="px-4 py-3">Total Liabilities + Equity</td>
+          <td class="px-4 py-3 text-right font-mono">$${(d.total_liabilities+d.total_equity).toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+function renderCF(d) {
+  const out = $('rpt-output');
+  out.innerHTML = `
+    <div class="p-4">
+      <h3 class="text-lg font-bold text-gray-800 mb-1">Cash Flow Statement</h3>
+      <p class="text-sm text-gray-500 mb-4">${d.start} to ${d.end} · ${d.dba}</p>
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-gray-50 rounded p-3 text-center">
+          <p class="text-xs text-gray-500">Beginning Cash</p>
+          <p class="text-lg font-bold">$${d.beginning_cash.toFixed(2)}</p>
+        </div>
+        <div class="bg-gray-50 rounded p-3 text-center">
+          <p class="text-xs text-gray-500">Net Change</p>
+          <p class="text-lg font-bold ${d.net_change>=0?'text-green-600':'text-red-600'}">$${d.net_change.toFixed(2)}</p>
+        </div>
+        <div class="bg-gray-50 rounded p-3 text-center">
+          <p class="text-xs text-gray-500">Ending Cash</p>
+          <p class="text-lg font-bold">$${d.ending_cash.toFixed(2)}</p>
+        </div>
+      </div>
+      <h4 class="font-semibold text-gray-700 mb-2">Checking Account Activity</h4>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
+        <th class="px-4 py-2 text-left">Date</th>
+        <th class="px-4 py-2 text-left">Description</th>
+        <th class="px-4 py-2 text-left">DBA</th>
+        <th class="px-4 py-2 text-right">In (Debit)</th>
+        <th class="px-4 py-2 text-right">Out (Credit)</th>
+      </tr></thead>
+      <tbody class="divide-y">
+        ${d.cash_transactions.map(t=>`
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-1.5">${t.date}</td>
+            <td class="px-4 py-1.5">${t.description}</td>
+            <td class="px-4 py-1.5">${dbaBadge(t.dba)}</td>
+            <td class="px-4 py-1.5 text-right font-mono text-green-700">${t.debit>0?'$'+t.debit.toFixed(2):''}</td>
+            <td class="px-4 py-1.5 text-right font-mono text-red-600">${t.credit>0?'$'+t.credit.toFixed(2):''}</td>
+          </tr>`).join('') || '<tr><td colspan="5" class="text-center py-4 text-gray-400">No cash transactions in this period</td></tr>'}
+      </tbody>
+    </table>`;
+}
+
+function renderExpCat(d) {
+  const out = $('rpt-output');
+  const total = d.categories.reduce((s,c)=>s+c.total,0);
+
+  out.innerHTML = `
+    <div class="p-4">
+      <h3 class="text-lg font-bold text-gray-800 mb-1">Expenses by Category</h3>
+      <p class="text-sm text-gray-500 mb-4">${d.start} to ${d.end} · ${d.dba}</p>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
+        <th class="px-4 py-2 text-left">Code</th>
+        <th class="px-4 py-2 text-left">Category</th>
+        <th class="px-4 py-2 text-right">Amount</th>
+        <th class="px-4 py-2 text-right">% of Total</th>
+      </tr></thead>
+      <tbody class="divide-y">
+        ${d.categories.map(c=>`
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 font-mono text-gray-500">${c.code}</td>
+            <td class="px-4 py-2">${c.name}</td>
+            <td class="px-4 py-2 text-right font-mono">$${c.total.toFixed(2)}</td>
+            <td class="px-4 py-2 text-right text-gray-500">${total>0?(c.total/total*100).toFixed(1)+'%':'—'}</td>
+          </tr>`).join('') || '<tr><td colspan="4" class="text-center py-4 text-gray-400">No expenses in this period</td></tr>'}
+      </tbody>
+      ${total>0?`<tfoot class="border-t-2 font-bold"><tr>
+        <td colspan="2" class="px-4 py-2">Total</td>
+        <td class="px-4 py-2 text-right font-mono">$${total.toFixed(2)}</td>
+        <td></td>
+      </tr></tfoot>`:''}
+    </table>`;
+
+  if (d.categories.length > 0) {
+    $('rpt-chart-wrap').classList.remove('hidden');
+    if (rptChart) rptChart.destroy();
+    rptChart = new Chart($('rpt-chart'), {
+      type: 'pie',
+      data: {
+        labels: d.categories.map(c=>c.name),
+        datasets: [{data: d.categories.map(c=>c.total), backgroundColor: [
+          '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6',
+          '#06b6d4','#f97316','#84cc16','#ec4899','#6366f1',
+          '#14b8a6','#f43f5e','#a855f7','#0ea5e9']}]
+      },
+      options: {plugins:{legend:{position:'right'}}, responsive:true}
+    });
+  }
+}
+
+function renderMoM(d) {
+  const out = $('rpt-output');
+  out.innerHTML = `
+    <div class="p-4">
+      <h3 class="text-lg font-bold text-gray-800 mb-1">Month-over-Month — ${d.year}</h3>
+      <p class="text-sm text-gray-500 mb-4">${d.dba}</p>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500 uppercase"><tr>
+        <th class="px-4 py-2 text-left">Month</th>
+        <th class="px-4 py-2 text-right">Income</th>
+        <th class="px-4 py-2 text-right">Expenses</th>
+        <th class="px-4 py-2 text-right">Net Income</th>
+      </tr></thead>
+      <tbody class="divide-y">
+        ${d.months.map(m=>`
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-1.5 font-medium">${m.month_name}</td>
+            <td class="px-4 py-1.5 text-right font-mono text-green-700">$${m.income.toFixed(2)}</td>
+            <td class="px-4 py-1.5 text-right font-mono text-red-600">$${m.expenses.toFixed(2)}</td>
+            <td class="px-4 py-1.5 text-right font-mono font-semibold ${m.net>=0?'text-blue-700':'text-red-600'}">$${m.net.toFixed(2)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  $('rpt-chart-wrap').classList.remove('hidden');
+  if (rptChart) rptChart.destroy();
+  rptChart = new Chart($('rpt-chart'), {
+    type: 'bar',
+    data: {
+      labels: d.months.map(m=>m.month_name),
+      datasets: [
+        {label:'Income',   data:d.months.map(m=>m.income),   backgroundColor:'#86efac'},
+        {label:'Expenses', data:d.months.map(m=>m.expenses), backgroundColor:'#fca5a5'},
+        {label:'Net',      data:d.months.map(m=>m.net),      type:'line', borderColor:'#3b82f6', backgroundColor:'transparent', pointRadius:4},
+      ]
+    },
+    options: {responsive:true, scales:{y:{beginAtZero:false}}}
+  });
+}
+
+function exportReportCSV() {
+  if (!reportData) { toast('Run a report first','error'); return; }
+  const {type, data} = reportData;
+  let rows = [], filename = `${type}-export.csv`;
+
+  if (type === 'pl') {
+    rows = [['Code','Account','Type','Amount']];
+    data.income.forEach(i  => rows.push([i.code, i.name, 'Income',  i.net.toFixed(2)]));
+    data.expenses.forEach(e => rows.push([e.code, e.name, 'Expense', e.net.toFixed(2)]));
+    rows.push(['','','Net Income', data.net_income.toFixed(2)]);
+  } else if (type === 'month-over-month') {
+    rows = [['Month','Income','Expenses','Net']];
+    data.months.forEach(m => rows.push([m.month_name, m.income, m.expenses, m.net]));
+  } else if (type === 'expense-categories') {
+    rows = [['Code','Category','Amount']];
+    data.categories.forEach(c => rows.push([c.code, c.name, c.total.toFixed(2)]));
+  } else if (type === 'balance-sheet') {
+    rows = [['Code','Account','Type','Balance']];
+    data.assets.forEach(a      => rows.push([a.code, a.name, 'Asset',     a.balance.toFixed(2)]));
+    data.liabilities.forEach(a => rows.push([a.code, a.name, 'Liability', a.balance.toFixed(2)]));
+    data.equity.forEach(a      => rows.push([a.code, a.name, 'Equity',    a.balance.toFixed(2)]));
+  }
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = filename;
+  a.click();
+}
+
+// ═══════════════ IMPORT ═══════════════
+function loadImportTab() {
+  // Populate account select (idempotent)
+  const acctSel = $('import-account');
+  if (acctSel.options.length <= 1) {
+    accounts.forEach(a => {
+      const opt = new Option(`${a.code} — ${a.name}`, a.id);
+      acctSel.appendChild(opt);
+    });
+  }
+  // Register drag-drop listeners only once
+  if (importTabInited) return;
+  importTabInited = true;
+  const dz = $('drop-zone');
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) processCSVFile(f);
+  });
+}
+
+function handleFileSelect(event) {
+  const f = event.target.files[0];
+  if (f) processCSVFile(f);
+}
+
+async function processCSVFile(f) {
+  csvFile = f;
+  $('drop-zone').innerHTML = `<p class="text-green-600 font-medium">✓ ${f.name}</p><p class="text-sm text-gray-400">${(f.size/1024).toFixed(1)} KB</p>`;
+  $('import-options').classList.remove('hidden');
+
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    const r = await fetch(`${API_BASE}/api/import/csv/preview`, {method:'POST', body:fd});
+    const data = await r.json();
+    const preview = $('import-preview');
+    const tableWrap = $('import-preview-table');
+    if (data.preview && data.preview.length) {
+      const cols = data.columns;
+      tableWrap.innerHTML = `
+        <p class="text-xs text-gray-500 mb-2">Detected ${data.total_rows} rows · Column mapping: ${JSON.stringify(data.column_mapping)}</p>
+        <table class="text-xs border-collapse w-full">
+          <thead class="bg-gray-100"><tr>${cols.map(c=>`<th class="border px-2 py-1">${c}</th>`).join('')}</tr></thead>
+          <tbody>${data.preview.map(row=>`<tr>${cols.map(c=>`<td class="border px-2 py-1">${row[c]||''}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>`;
+      preview.classList.remove('hidden');
+    }
+  } catch {}
+}
+
+async function doImport() {
+  if (!csvFile) { toast('Select a file first','error'); return; }
+  const dba     = $('import-dba').value;
+  const account = $('import-account').value;
+  const fd = new FormData();
+  fd.append('file', csvFile);
+  let url = `${API_BASE}/api/import/csv?dba=${dba}`;
+  if (account) url += `&account_id=${account}`;
+  try {
+    const r = await fetch(url, {method:'POST', body:fd});
+    const data = await r.json();
+    const result = $('import-result');
+    result.classList.remove('hidden');
+    result.className = `mt-4 p-4 rounded-xl text-sm ${data.imported > 0 ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'}`;
+    result.innerHTML = `
+      <p class="font-semibold mb-1">${data.imported > 0 ? '✓' : '⚠'} Import complete: ${data.imported} imported, ${data.skipped} skipped</p>
+      ${data.errors.length ? `<ul class="list-disc pl-4 mt-1">${data.errors.map(e=>`<li class="text-xs">${e}</li>`).join('')}</ul>` : ''}`;
+  } catch(e) {
+    toast(e.message,'error');
+  }
+}
+
+// ═══════════════ ASK CLAUDE ═══════════════
+function setQuestion(q) {
+  $('ask-question').value = q;
+}
+
+async function askClaude() {
+  const question = $('ask-question').value.trim();
+  if (!question) { toast('Enter a question first','error'); return; }
+  $('ask-loading').classList.remove('hidden');
+  $('ask-answer').classList.add('hidden');
+  $('ask-btn').disabled = true;
+  try {
+    const data = await apiFetch('/api/ask', {
+      method:'POST',
+      body: JSON.stringify({
+        question,
+        start_date: $('ask-start').value || null,
+        end_date:   $('ask-end').value   || null,
+        dba: $('ask-dba').value,
+      })
+    });
+    $('ask-answer').textContent = data.answer;
+    $('ask-answer').classList.remove('hidden');
+  } catch(e) {
+    $('ask-answer').textContent = 'Error: ' + e.message;
+    $('ask-answer').classList.remove('hidden');
+    $('ask-answer').className = 'mt-4 p-4 bg-red-50 rounded-xl text-sm text-red-800';
+  } finally {
+    $('ask-loading').classList.add('hidden');
+    $('ask-btn').disabled = false;
+  }
+}
+
+// ═══════════════ SETTINGS ═══════════════
+async function saveApiKey() {
+  const key = $('settings-api-key').value.trim();
+  if (!key) { toast('Enter an API key first','error'); return; }
+  try {
+    await apiFetch('/api/settings/anthropic_api_key', {method:'POST', body:JSON.stringify({value:key})});
+    $('api-key-status').textContent = 'Saved to database.';
+    $('api-key-status').className = 'text-xs mt-2 text-green-600';
+    $('settings-api-key').value = '';
+    toast('API key saved');
+  } catch(e) {
+    $('api-key-status').textContent = 'Error: ' + e.message;
+    $('api-key-status').className = 'text-xs mt-2 text-red-500';
+  }
+}
+
+async function loadSettingsTab() {
+  try {
+    const row = await apiFetch('/api/settings/anthropic_api_key');
+    if (row.value) {
+      $('api-key-status').textContent = 'API key is saved in database.';
+      $('api-key-status').className = 'text-xs mt-2 text-green-600';
+    }
+  } catch {}
+}
+
+function saveApiUrl() {
+  API_BASE = $('settings-api-url').value.trim().replace(/\/$/, '');
+  localStorage.setItem('api_base', API_BASE);
+  toast('API URL saved — reload the page to apply');
+}
+
+// ═══════════════ BACKUP ═══════════════
+function downloadBackup() {
+  window.open(`${API_BASE}/api/backup`, '_blank');
+}
+
+function downloadAndOpenDrive() {
+  downloadBackup();
+  // Small delay so download starts before new tab opens
+  setTimeout(() => window.open('https://drive.google.com', '_blank'), 600);
+}
+
+// ═══════════════ MODAL ═══════════════
+function closeModal(id) {
+  $(id).classList.add('hidden');
+}
+
+// ═══════════════ INIT ═══════════════
+async function init() {
+  // Set default dates
+  $('tx-start').value  = `${new Date().getFullYear()}-01-01`;
+  $('tx-end').value    = today();
+  $('rpt-start').value = monthStart();
+  $('rpt-end').value   = today();
+  $('rpt-asof').value  = today();
+  $('rpt-year').value  = new Date().getFullYear();
+  $('ask-start').value = `${new Date().getFullYear()}-01-01`;
+  $('ask-end').value   = today();
+  $('settings-api-url').value = API_BASE;
+
+  try {
+    const health = await apiFetch('/api/health');
+    $('db-status').textContent = '● Connected';
+  } catch {
+    $('db-status').textContent = '● Offline';
+    $('db-status').className   = 'text-red-300';
+  }
+
+  await fetchAccounts();
+  loadDashboard();
+}
+
+init();
+</script>
+</body>
+</html>
