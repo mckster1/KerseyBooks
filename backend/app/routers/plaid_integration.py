@@ -7,7 +7,7 @@ Flow:
   3. POST /api/plaid/sync              → pull new transactions into plaid_pending staging table
   4. GET  /api/plaid/pending           → review queue
   5. POST /api/plaid/post/{id}         → approve + create journal entry
-  6. POST /api/plaid/suggest/{id}      → (re-)ask Claude for a better suggestion
+  6. POST /api/plaid/suggest/{id}      → (re-)ask the configured AI for a better suggestion
   7. POST /api/plaid/skip/{id}         → dismiss
 """
 
@@ -19,6 +19,7 @@ import os
 import json
 
 from ..database import get_db
+from ..llm import complete_json, get_llm_config
 
 router = APIRouter(prefix="/api/plaid", tags=["plaid"])
 
@@ -111,18 +112,13 @@ def _suggest(description: str, merchant: str, amount: float, accounts: list) -> 
     return {"account_id": acct_id("5130"), "dba": dba, "confidence": "low"}  # misc
 
 
-async def _claude_suggest(description: str, merchant: str, amount: float,
-                          accounts: list, db: sqlite3.Connection) -> dict:
-    """Ask Claude for a better categorization suggestion."""
-    row = db.execute("SELECT value FROM settings WHERE key='anthropic_api_key'").fetchone()
-    api_key = (row["value"] if row else None) or os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return _suggest(description, merchant, amount, accounts)
-
+async def _ai_suggest(description: str, merchant: str, amount: float,
+                      accounts: list, db: sqlite3.Connection) -> dict:
+    """Ask the configured AI provider for a better categorization suggestion."""
     try:
-        import anthropic
+        config = get_llm_config(db)
         direction = "money IN (income/deposit)" if amount <= 0 else f"money OUT of checking (expense), ${abs(amount):.2f}"
-        acct_list = "\n".join(f"  {a['code']} — {a['name']} ({a['type']})" for a in accounts)
+        acct_list = "\n".join(f"  {a['code']} - {a['name']} ({a['type']})" for a in accounts)
 
         prompt = (
             f"Transaction for a small car-wash and laundromat business:\n"
@@ -134,16 +130,12 @@ async def _claude_suggest(description: str, merchant: str, amount: float,
             f'{{"account_code": "<best account code>", "dba": "carwash|laundromat|shared", '
             f'"confidence": "high|medium|low", "reason": "<one sentence>"}}'
         )
-        client = anthropic.Anthropic(api_key=api_key)
-        msg = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=256,
-            messages=[{"role": "user", "content": prompt}],
+        data = complete_json(
+            config,
+            "You categorize bookkeeping transactions and return JSON only.",
+            prompt,
+            max_tokens=256,
         )
-        raw = msg.content[0].text.strip()
-        # Strip markdown fences if present
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        data = json.loads(raw)
         acct_id = next((a["id"] for a in accounts if a["code"] == data.get("account_code")), None)
         return {
             "account_id":  acct_id,
@@ -417,7 +409,8 @@ def skip_transaction(pending_id: int, db: sqlite3.Connection = Depends(get_db)):
 
 
 class SuggestBody(BaseModel):
-    use_claude: bool = True
+    use_ai: bool = True
+    use_claude: Optional[bool] = None
 
 
 @router.post("/suggest/{pending_id}")
@@ -426,16 +419,17 @@ async def re_suggest(
     body: SuggestBody,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Re-run categorization on a pending transaction (optionally asking Claude)."""
+    """Re-run categorization on a pending transaction (optionally asking AI)."""
     pend = db.execute("SELECT * FROM plaid_pending WHERE id=?", (pending_id,)).fetchone()
     if not pend:
         raise HTTPException(404, "Pending transaction not found")
     pend = dict(pend)
     accounts = [dict(r) for r in db.execute("SELECT id, code, name, type FROM accounts").fetchall()]
 
-    if body.use_claude:
-        s = await _claude_suggest(pend["description"], pend.get("merchant_name") or "",
-                                  pend["amount"], accounts, db)
+    use_ai = body.use_ai if body.use_claude is None else body.use_claude
+    if use_ai:
+        s = await _ai_suggest(pend["description"], pend.get("merchant_name") or "",
+                              pend["amount"], accounts, db)
     else:
         s = _suggest(pend["description"], pend.get("merchant_name") or "", pend["amount"], accounts)
 

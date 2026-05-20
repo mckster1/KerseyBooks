@@ -105,6 +105,8 @@ class AskRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     dba: Optional[str] = "all"
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 class AskResponse(BaseModel):
     answer: str

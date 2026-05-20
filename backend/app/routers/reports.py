@@ -20,8 +20,8 @@ def _pl_query(db: sqlite3.Connection, start: str, end: str, dba: Optional[str]):
     dba_sql, dba_params = _dba_filter(dba)
     rows = db.execute(
         f"""SELECT a.id, a.code, a.name, a.type,
-                   COALESCE(SUM(jl.debit),  0) AS total_debit,
-                   COALESCE(SUM(jl.credit), 0) AS total_credit
+                   COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN jl.debit ELSE 0 END), 0) AS total_debit,
+                   COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN jl.credit ELSE 0 END), 0) AS total_credit
             FROM accounts a
             LEFT JOIN journal_lines jl  ON jl.account_id = a.id
             LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id
@@ -76,8 +76,8 @@ def balance_sheet(
     dba_sql, dba_params = _dba_filter(dba)
     rows = db.execute(
         f"""SELECT a.id, a.code, a.name, a.type, a.normal_balance,
-                   COALESCE(SUM(jl.debit),  0) AS total_debit,
-                   COALESCE(SUM(jl.credit), 0) AS total_credit
+                   COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN jl.debit ELSE 0 END), 0) AS total_debit,
+                   COALESCE(SUM(CASE WHEN je.id IS NOT NULL THEN jl.credit ELSE 0 END), 0) AS total_credit
             FROM accounts a
             LEFT JOIN journal_lines jl  ON jl.account_id = a.id
             LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id

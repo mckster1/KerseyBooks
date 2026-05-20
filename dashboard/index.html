@@ -127,7 +127,7 @@
     <button onclick="showTab('ask')" id="tab-btn-ask"
       class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
       <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-      Ask Claude
+      Ask AI
     </button>
     <button onclick="showTab('settings')" id="tab-btn-settings"
       class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
@@ -397,11 +397,11 @@
   <div id="import-result" class="hidden mt-4 p-4 rounded-xl text-sm"></div>
 </div>
 
-<!-- ═══════════════════ ASK CLAUDE ═══════════════════ -->
+<!-- ASK AI -->
 <div id="tab-ask" class="tab-panel">
-  <h2 class="text-xl font-bold text-gray-800 mb-4">Ask Claude</h2>
+  <h2 class="text-xl font-bold text-gray-800 mb-4">Ask AI</h2>
   <div class="bg-white rounded-xl shadow p-6">
-    <p class="text-sm text-gray-600 mb-4">Ask a plain-English question about your books. Claude has access to your account balances and transactions for the selected date range.</p>
+    <p class="text-sm text-gray-600 mb-4">Ask a plain-English question about your books. The configured AI model has access to your account balances and transactions for the selected date range.</p>
     <div class="flex flex-wrap gap-3 mb-4">
       <input type="date" id="ask-start" class="border rounded px-2 py-1.5 text-sm">
       <input type="date" id="ask-end"   class="border rounded px-2 py-1.5 text-sm">
@@ -420,7 +420,7 @@
       </div>
       <textarea id="ask-question" rows="3" placeholder="E.g. What were my total utilities expenses for the first quarter?" class="w-full border rounded px-3 py-2 text-sm resize-none"></textarea>
     </div>
-    <button onclick="askClaude()" id="ask-btn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded font-medium">Ask Claude</button>
+    <button onclick="askAssistant()" id="ask-btn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded font-medium">Ask AI</button>
     <div id="ask-loading" class="hidden mt-4 text-gray-400 text-sm animate-pulse">Thinking…</div>
     <div id="ask-answer" class="hidden mt-4 p-4 bg-blue-50 rounded-xl text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"></div>
   </div>
@@ -431,10 +431,21 @@
   <h2 class="text-xl font-bold text-gray-800 mb-4">Settings</h2>
   <div class="grid gap-4 max-w-2xl">
     <div class="bg-white rounded-xl shadow p-5">
-      <h3 class="font-semibold text-gray-700 mb-3">Claude API Key</h3>
-      <p class="text-sm text-gray-500 mb-3">Required for the Ask Claude tab. Saved to the database — no need to edit .env manually.</p>
-      <div class="flex gap-2">
-        <input type="password" id="settings-api-key" placeholder="sk-ant-..." class="flex-1 border rounded px-3 py-2 text-sm">
+      <h3 class="font-semibold text-gray-700 mb-3">AI Assistant</h3>
+      <p class="text-sm text-gray-500 mb-3">Choose the provider and model used by Ask AI and Plaid suggestions.</p>
+      <div class="grid gap-2 sm:grid-cols-2 mb-2">
+        <select id="settings-llm-provider" class="border rounded px-3 py-2 text-sm">
+          <option value="anthropic">Anthropic</option>
+          <option value="openai">OpenAI</option>
+          <option value="openai-compatible">OpenAI-compatible</option>
+        </select>
+        <input type="text" id="settings-llm-model" placeholder="Model, e.g. claude-haiku-4-5-20251001" class="border rounded px-3 py-2 text-sm">
+      </div>
+      <div class="grid gap-2 sm:grid-cols-2 mb-2">
+        <input type="password" id="settings-api-key" placeholder="API key" class="border rounded px-3 py-2 text-sm">
+        <input type="text" id="settings-llm-base-url" placeholder="Base URL for compatible APIs" class="border rounded px-3 py-2 text-sm">
+      </div>
+      <div>
         <button onclick="saveApiKey()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save</button>
       </div>
       <p id="api-key-status" class="text-xs mt-2 text-gray-500"></p>
@@ -1451,12 +1462,12 @@ async function doImport() {
   }
 }
 
-// ═══════════════ ASK CLAUDE ═══════════════
+// ASK AI
 function setQuestion(q) {
   $('ask-question').value = q;
 }
 
-async function askClaude() {
+async function askAssistant() {
   const question = $('ask-question').value.trim();
   if (!question) { toast('Enter a question first','error'); return; }
   $('ask-loading').classList.remove('hidden');
@@ -1487,13 +1498,19 @@ async function askClaude() {
 // ═══════════════ SETTINGS ═══════════════
 async function saveApiKey() {
   const key = $('settings-api-key').value.trim();
+  const provider = $('settings-llm-provider').value;
+  const model = $('settings-llm-model').value.trim();
+  const baseUrl = $('settings-llm-base-url').value.trim().replace(/\/$/, '');
   if (!key) { toast('Enter an API key first','error'); return; }
   try {
-    await apiFetch('/api/settings/anthropic_api_key', {method:'POST', body:JSON.stringify({value:key})});
-    $('api-key-status').textContent = 'Saved to database.';
+    await apiFetch('/api/settings/llm_provider', {method:'POST', body:JSON.stringify({value:provider})});
+    await apiFetch('/api/settings/llm_api_key', {method:'POST', body:JSON.stringify({value:key})});
+    if (model) await apiFetch('/api/settings/llm_model', {method:'POST', body:JSON.stringify({value:model})});
+    if (baseUrl) await apiFetch('/api/settings/llm_base_url', {method:'POST', body:JSON.stringify({value:baseUrl})});
+    $('api-key-status').textContent = 'AI settings saved to database.';
     $('api-key-status').className = 'text-xs mt-2 text-green-600';
     $('settings-api-key').value = '';
-    toast('API key saved');
+    toast('AI settings saved');
   } catch(e) {
     $('api-key-status').textContent = 'Error: ' + e.message;
     $('api-key-status').className = 'text-xs mt-2 text-red-500';
@@ -1502,9 +1519,17 @@ async function saveApiKey() {
 
 async function loadSettingsTab() {
   try {
-    const row = await apiFetch('/api/settings/anthropic_api_key');
-    if (row.value) {
-      $('api-key-status').textContent = 'API key is saved in database.';
+    const [provider, model, key, baseUrl] = await Promise.all([
+      apiFetch('/api/settings/llm_provider'),
+      apiFetch('/api/settings/llm_model'),
+      apiFetch('/api/settings/llm_api_key'),
+      apiFetch('/api/settings/llm_base_url'),
+    ]);
+    if (provider.value) $('settings-llm-provider').value = provider.value;
+    if (model.value) $('settings-llm-model').value = model.value;
+    if (baseUrl.value) $('settings-llm-base-url').value = baseUrl.value;
+    if (key.value) {
+      $('api-key-status').textContent = 'AI API key is saved in database.';
       $('api-key-status').className = 'text-xs mt-2 text-green-600';
     }
   } catch {}

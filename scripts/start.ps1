@@ -12,7 +12,7 @@ $envFile    = Join-Path $Root ".env"
 $envExample = Join-Path $Root ".env.example"
 if (-not (Test-Path $envFile)) {
     Copy-Item $envExample $envFile
-    Write-Host ".env created - add ANTHROPIC_API_KEY to enable Ask Claude" -ForegroundColor Yellow
+    Write-Host ".env created - add LLM_API_KEY to enable Ask AI" -ForegroundColor Yellow
 }
 
 # 2. Create venv if missing

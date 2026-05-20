@@ -30,7 +30,7 @@ On first run the script will:
 python -m venv .venv
 .venv\Scripts\pip install -r backend\requirements.txt
 
-# Edit .env — add your ANTHROPIC_API_KEY if using Ask Claude
+# Edit .env - add LLM_API_KEY if using Ask AI
 Copy-Item .env.example .env
 notepad .env
 
@@ -46,7 +46,10 @@ cd backend
 | Variable | Default | Description |
 |---|---|---|
 | `DB_PATH` | `./kersey.db` | Path to SQLite database |
-| `ANTHROPIC_API_KEY` | *(empty)* | Required for Ask Claude tab |
+| `LLM_PROVIDER` | `anthropic` | AI provider: `anthropic`, `openai`, or `openai-compatible` |
+| `LLM_MODEL` | provider default | Model used by Ask AI and Plaid suggestions |
+| `LLM_API_KEY` | *(empty)* | Required for Ask AI and AI-assisted Plaid suggestions |
+| `LLM_BASE_URL` | OpenAI default | Optional base URL for OpenAI-compatible providers |
 | `CORS_ORIGINS` | `http://localhost:8001` | Allowed CORS origins |
 
 ---
@@ -71,7 +74,7 @@ KerseyBooks/
 │           ├── journal_entries.py — GET/POST/DELETE /api/journal-entries
 │           ├── reports.py         — P&L, Balance Sheet, Cash Flow, etc.
 │           ├── imports.py         — POST /api/import/csv
-│           └── ask.py             — POST /api/ask (Claude Q&A)
+│           └── ask.py             — POST /api/ask (AI Q&A)
 ├── dashboard/
 │   └── index.html        — Single-file dashboard (served at /)
 └── scripts/
@@ -97,7 +100,7 @@ KerseyBooks/
 | GET | `/api/reports/month-over-month` | Monthly P&L comparison (`?year=&dba=`) |
 | POST | `/api/import/csv` | Import CSV transactions |
 | POST | `/api/import/csv/preview` | Preview CSV without importing |
-| POST | `/api/ask` | Claude Q&A with financial context |
+| POST | `/api/ask` | AI Q&A with financial context |
 | GET | `/api/backup` | Download database file |
 | GET | `/api/health` | Health check |
 
