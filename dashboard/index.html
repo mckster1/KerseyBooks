@@ -360,6 +360,9 @@
 <!-- ═══════════════════ IMPORT ═══════════════════ -->
 <div id="tab-import" class="tab-panel">
   <h2 class="text-xl font-bold text-gray-800 mb-4">Import CSV</h2>
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-amber-800">
+    <strong>Staging note:</strong> Imported rows are stored in a staging table for review — they do <em>not</em> automatically appear in Reports or the Journal Entries tab. After import, create Journal Entries manually (or use the Plaid integration when available) to post transactions to the general ledger.
+  </div>
   <div class="bg-white rounded-xl shadow p-6 mb-4">
     <p class="text-sm text-gray-600 mb-4">Upload a CSV from Patriot Software (GL export) or your bank. Supported formats: Date, Description, Debit, Credit — or Date, Description, Amount.</p>
     <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-file').click()">

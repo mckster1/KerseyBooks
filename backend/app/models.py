@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, Field
 from typing import Optional, List
 from datetime import date, datetime
 
@@ -31,8 +31,8 @@ class AccountOut(AccountBase):
 
 class JournalLineCreate(BaseModel):
     account_id: int
-    debit: float = 0.0
-    credit: float = 0.0
+    debit: float = Field(0.0, ge=0)
+    credit: float = Field(0.0, ge=0)
     dba_override: Optional[str] = None
 
 class JournalEntryCreate(BaseModel):
@@ -45,6 +45,14 @@ class JournalEntryCreate(BaseModel):
 
     @validator("lines")
     def lines_must_balance(cls, lines):
+        if len(lines) < 2:
+            raise ValueError("Journal entry must have at least two lines")
+        for i, l in enumerate(lines, 1):
+            d, c = round(l.debit, 2), round(l.credit, 2)
+            if d > 0 and c > 0:
+                raise ValueError(f"Line {i}: a line cannot have both a debit and a credit amount")
+            if d == 0 and c == 0:
+                raise ValueError(f"Line {i}: a line must have a debit or a credit amount")
         total_debit  = sum(round(l.debit,  2) for l in lines)
         total_credit = sum(round(l.credit, 2) for l in lines)
         if abs(total_debit - total_credit) > 0.005:
@@ -52,8 +60,8 @@ class JournalEntryCreate(BaseModel):
                 f"Journal entry does not balance — "
                 f"debits={total_debit:.2f}, credits={total_credit:.2f}"
             )
-        if not lines:
-            raise ValueError("Journal entry must have at least two lines")
+        if total_debit == 0:
+            raise ValueError("Journal entry total cannot be zero")
         return lines
 
 class JournalLineOut(BaseModel):

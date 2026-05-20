@@ -60,6 +60,24 @@ def update_account(
     updates = {k: v for k, v in data.dict().items() if v is not None}
     if not updates:
         return dict(existing)
+
+    # Reclassifying an account that already has posted activity would silently
+    # restate every historical report. Block it once the account is in use.
+    reclassifying = (
+        ("type" in updates and updates["type"] != existing["type"])
+        or ("normal_balance" in updates and updates["normal_balance"] != existing["normal_balance"])
+    )
+    if reclassifying:
+        in_use = db.execute(
+            "SELECT 1 FROM journal_lines WHERE account_id = ? LIMIT 1", (account_id,)
+        ).fetchone()
+        if in_use:
+            raise HTTPException(
+                409,
+                "Cannot change the type or normal balance of an account that has "
+                "posted journal entries — create a new account instead.",
+            )
+
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     db.execute(
         f"UPDATE accounts SET {set_clause} WHERE id = ?",

@@ -1,10 +1,9 @@
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,11 +63,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
-origins = os.getenv("CORS_ORIGINS", "http://localhost:8001,http://127.0.0.1:8001").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -95,8 +93,13 @@ def startup():
 @app.get("/api/backup")
 def download_backup():
     if not Path(DB_PATH).exists():
-        from fastapi import HTTPException
         raise HTTPException(404, "Database file not found")
+    # Flush the WAL into the main .db file so the downloaded copy is complete
+    _conn = sqlite3.connect(DB_PATH)
+    try:
+        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        _conn.close()
     return FileResponse(
         path=DB_PATH,
         filename="kersey_backup.db",
