@@ -452,12 +452,22 @@
     </div>
     <div class="bg-white rounded-xl shadow p-5">
       <h3 class="font-semibold text-gray-700 mb-3">Database Backup</h3>
-      <p class="text-sm text-gray-500 mb-3">Downloads your kersey.db file. Keep copies regularly — this is your only data store.</p>
+      <p class="text-sm text-gray-500 mb-3">Download your database or connect Google Drive to upload it directly.</p>
       <div class="flex flex-wrap gap-2">
         <button onclick="downloadBackup()" class="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded">Download Backup</button>
-        <button onclick="downloadAndOpenDrive()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Download + Open Google Drive</button>
+        <button onclick="uploadBackupToDrive()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Upload to Google Drive</button>
+        <button onclick="connectGoogleDrive()" class="bg-slate-700 hover:bg-slate-800 text-white text-sm px-4 py-2 rounded">Connect Google Drive</button>
+        <button onclick="disconnectGoogleDrive()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-4 py-2 rounded">Disconnect</button>
       </div>
-      <p class="text-xs text-gray-400 mt-2">Google Drive account: kerseywash@gmail.com</p>
+      <div class="grid gap-2 sm:grid-cols-2 mt-3">
+        <input type="text" id="settings-google-client-id" placeholder="Google OAuth client ID" class="border rounded px-3 py-2 text-sm">
+        <input type="password" id="settings-google-client-secret" placeholder="Google OAuth client secret" class="border rounded px-3 py-2 text-sm">
+        <input type="text" id="settings-google-folder-id" placeholder="Optional Drive folder ID" class="border rounded px-3 py-2 text-sm sm:col-span-2">
+      </div>
+      <div class="mt-2">
+        <button onclick="saveGoogleDriveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save Drive Settings</button>
+      </div>
+      <p id="drive-status" class="text-xs text-gray-500 mt-2"></p>
     </div>
     <div class="bg-white rounded-xl shadow p-5">
       <h3 class="font-semibold text-gray-700 mb-3">API Base URL</h3>
@@ -1438,6 +1448,7 @@ async function processCSVFile(f) {
       preview.classList.remove('hidden');
     }
   } catch {}
+  await loadDriveStatus();
 }
 
 async function doImport() {
@@ -1546,10 +1557,68 @@ function downloadBackup() {
   window.open(`${API_BASE}/api/backup`, '_blank');
 }
 
-function downloadAndOpenDrive() {
-  downloadBackup();
-  // Small delay so download starts before new tab opens
-  setTimeout(() => window.open('https://drive.google.com', '_blank'), 600);
+async function saveGoogleDriveSettings() {
+  const clientId = $('settings-google-client-id').value.trim();
+  const clientSecret = $('settings-google-client-secret').value.trim();
+  const folderId = $('settings-google-folder-id').value.trim();
+  try {
+    if (clientId) await apiFetch('/api/settings/google_client_id', {method:'POST', body:JSON.stringify({value:clientId})});
+    if (clientSecret) await apiFetch('/api/settings/google_client_secret', {method:'POST', body:JSON.stringify({value:clientSecret})});
+    if (folderId) await apiFetch('/api/settings/google_drive_folder_id', {method:'POST', body:JSON.stringify({value:folderId})});
+    $('settings-google-client-secret').value = '';
+    toast('Google Drive settings saved');
+    await loadDriveStatus();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function connectGoogleDrive() {
+  try {
+    const data = await apiFetch('/api/google-drive/auth-url');
+    window.open(data.auth_url, '_blank');
+    $('drive-status').textContent = `Finish Google sign-in, then return here. Redirect URI: ${data.redirect_uri}`;
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function disconnectGoogleDrive() {
+  try {
+    await apiFetch('/api/google-drive/connection', {method:'DELETE'});
+    toast('Google Drive disconnected');
+    await loadDriveStatus();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function uploadBackupToDrive() {
+  try {
+    $('drive-status').textContent = 'Uploading backup...';
+    const data = await apiFetch('/api/google-drive/backup', {method:'POST'});
+    $('drive-status').innerHTML = `Backup uploaded: <a class="text-blue-600 underline" href="${data.url}" target="_blank">${data.name}</a>`;
+    toast('Backup uploaded to Google Drive');
+  } catch(e) {
+    $('drive-status').textContent = 'Error: ' + e.message;
+    toast(e.message, 'error');
+  }
+}
+
+async function loadDriveStatus() {
+  try {
+    const data = await apiFetch('/api/google-drive/status');
+    $('settings-google-folder-id').value = data.folder_id || '';
+    if (!data.configured) {
+      $('drive-status').textContent = 'Google Drive is not configured yet. Save OAuth client ID and secret first.';
+    } else if (data.connected) {
+      $('drive-status').textContent = `Connected to Google Drive${data.email ? ': ' + data.email : ''}`;
+    } else {
+      $('drive-status').textContent = 'Google Drive is configured but not connected.';
+    }
+  } catch(e) {
+    $('drive-status').textContent = 'Google Drive status unavailable.';
+  }
 }
 
 // ═══════════════ MODAL ═══════════════

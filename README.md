@@ -51,6 +51,9 @@ cd backend
 | `LLM_API_KEY` | *(empty)* | Required for Ask AI and AI-assisted Plaid suggestions |
 | `LLM_BASE_URL` | OpenAI default | Optional base URL for OpenAI-compatible providers |
 | `CORS_ORIGINS` | `http://localhost:8001` | Allowed CORS origins |
+| `GOOGLE_CLIENT_ID` | *(empty)* | Optional Google OAuth client ID for Drive backups |
+| `GOOGLE_CLIENT_SECRET` | *(empty)* | Optional Google OAuth client secret for Drive backups |
+| `GOOGLE_DRIVE_FOLDER_ID` | *(empty)* | Optional folder ID where database backups are uploaded |
 
 ---
 
@@ -140,6 +143,20 @@ The `.db` file **is** the backup. Download it anytime:
 - Or: copy `kersey.db` directly
 
 The database is excluded from git. Keep regular copies.
+
+### Google Drive Backup
+
+KerseyBooks can connect directly to a user's own Google Drive account and upload
+`kersey_backup.db`.
+
+1. Create OAuth credentials in Google Cloud for a web application.
+2. Add this authorized redirect URI:
+   `http://localhost:8001/api/google-drive/callback`
+3. In KerseyBooks Settings, save the Google client ID and client secret.
+4. Click **Connect Google Drive** and sign in to the account that should receive backups.
+5. Click **Upload to Google Drive**.
+
+Set `GOOGLE_DRIVE_FOLDER_ID` or the Settings folder field to upload into a specific Drive folder.
 
 ---
 

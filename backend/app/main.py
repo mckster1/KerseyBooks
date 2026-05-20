@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import sqlite3
 
 from .database import init_db, get_db, DB_PATH
-from .routers import accounts, journal_entries, reports, imports, ask, settings
+from .routers import accounts, journal_entries, reports, imports, ask, settings, google_drive
 
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
@@ -77,6 +77,7 @@ app.include_router(reports.router)
 app.include_router(imports.router)
 app.include_router(ask.router)
 app.include_router(settings.router)
+app.include_router(google_drive.router)
 
 
 @app.on_event("startup")
