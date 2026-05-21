@@ -6,6 +6,7 @@
 <title>KerseyBooks</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 <style>
   /* ── Base ─────────────────────────────────────────────── */
   body { font-family: 'Segoe UI', system-ui, sans-serif; }
@@ -24,6 +25,7 @@
   #tab-btn-reports.active      { color:#5b21b6; border-bottom-color:#5b21b6; background:#f5f3ff; }
   #tab-btn-accounts.active     { color:#92400e; border-bottom-color:#92400e; background:#fffbeb; }
   #tab-btn-import.active       { color:#0f766e; border-bottom-color:#0f766e; background:#f0fdfa; }
+  #tab-btn-bank.active         { color:#0369a1; border-bottom-color:#0369a1; background:#f0f9ff; }
   #tab-btn-ask.active          { color:#9f1239; border-bottom-color:#9f1239; background:#fff1f2; }
   #tab-btn-settings.active     { color:#374151; border-bottom-color:#374151; background:#f9fafb; }
 
@@ -34,6 +36,7 @@
   #tab-reports      h2 { color: #5b21b6; }
   #tab-accounts     h2 { color: #92400e; }
   #tab-import       h2 { color: #0f766e; }
+  #tab-bank         h2 { color: #0369a1; }
   #tab-ask          h2 { color: #9f1239; }
   #tab-settings     h2 { color: #374151; }
 
@@ -123,6 +126,11 @@
       class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
       <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
       Import
+    </button>
+    <button onclick="showTab('bank')" id="tab-btn-bank"
+      class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M5 10V7a2 2 0 012-2h10a2 2 0 012 2v3M6 10v9m4-9v9m4-9v9m4-9v9M4 19h16"/></svg>
+      Bank Feed
     </button>
     <button onclick="showTab('ask')" id="tab-btn-ask"
       class="tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-b-2 border-transparent">
@@ -397,6 +405,65 @@
   <div id="import-result" class="hidden mt-4 p-4 rounded-xl text-sm"></div>
 </div>
 
+<!-- BANK FEED -->
+<div id="tab-bank" class="tab-panel">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h2 class="text-xl font-bold text-gray-800">Bank Feed</h2>
+    <div class="flex flex-wrap gap-2">
+      <button onclick="connectPlaid()" class="bg-sky-700 hover:bg-sky-800 text-white text-sm px-4 py-2 rounded font-medium">Connect Bank</button>
+      <button onclick="syncPlaid()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded font-medium">Sync</button>
+      <button onclick="loadBankFeed()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-4 py-2 rounded font-medium">Refresh</button>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4 mb-4">
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">Plaid Status</p>
+      <p id="plaid-status" class="text-sm font-semibold text-gray-800">Checking...</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">Connections</p>
+      <p id="plaid-connection-count" class="text-2xl font-bold text-sky-700">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-500 mb-1">Pending Review</p>
+      <p id="plaid-pending-count" class="text-2xl font-bold text-blue-700">0</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4 mb-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <h3 class="font-semibold text-gray-700">Connected Banks</h3>
+      <span class="text-xs text-gray-500">Map each Plaid account to the matching bookkeeping bank account before posting.</span>
+    </div>
+    <div id="plaid-connections" class="space-y-3 text-sm"></div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
+      <h3 class="font-semibold text-gray-700">Pending Transactions</h3>
+      <select id="plaid-status-filter" onchange="loadPlaidPending()" class="border rounded px-2 py-1 text-sm">
+        <option value="pending">Pending</option>
+        <option value="posted">Posted</option>
+        <option value="skipped">Skipped</option>
+      </select>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <tr>
+            <th class="px-4 py-2 text-left">Date</th>
+            <th class="px-4 py-2 text-left">Description</th>
+            <th class="px-4 py-2 text-right">Amount</th>
+            <th class="px-4 py-2 text-left">Suggested Posting</th>
+            <th class="px-4 py-2 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="plaid-pending-body" class="divide-y"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 <!-- ASK AI -->
 <div id="tab-ask" class="tab-panel">
   <h2 class="text-xl font-bold text-gray-800 mb-4">Ask AI</h2>
@@ -451,6 +518,20 @@
       <p id="api-key-status" class="text-xs mt-2 text-gray-500"></p>
     </div>
     <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-semibold text-gray-700 mb-3">Plaid Bank Feed</h3>
+      <p class="text-sm text-gray-500 mb-3">Save Plaid API credentials, then use the Bank Feed tab to connect accounts.</p>
+      <div class="grid gap-2 sm:grid-cols-3 mb-2">
+        <input type="text" id="settings-plaid-client-id" placeholder="Plaid client ID" class="border rounded px-3 py-2 text-sm">
+        <input type="password" id="settings-plaid-secret" placeholder="Plaid secret" class="border rounded px-3 py-2 text-sm">
+        <select id="settings-plaid-env" class="border rounded px-3 py-2 text-sm">
+          <option value="sandbox">Sandbox</option>
+          <option value="development">Development</option>
+          <option value="production">Production</option>
+        </select>
+      </div>
+      <button onclick="savePlaidSettings()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save Plaid Settings</button>
+      <p id="plaid-settings-status" class="text-xs mt-2 text-gray-500"></p>
+    </div>    <div class="bg-white rounded-xl shadow p-5">
       <h3 class="font-semibold text-gray-700 mb-3">Database Backup</h3>
       <p class="text-sm text-gray-500 mb-3">Download your database or connect Google Drive to upload it directly.</p>
       <div class="flex flex-wrap gap-2">
@@ -631,6 +712,7 @@ const PAGE_SIZE = 50;
 let jeOffset = 0;
 let txOffset = 0;
 let editingEntryId = null;  // null = new entry, number = editing existing
+let plaidConnections = [];
 
 // ═══════════════ UTILITIES ═══════════════
 function $(id) { return document.getElementById(id); }
@@ -669,7 +751,9 @@ async function apiFetch(path, options={}) {
     try { const e = await r.json(); msg = e.detail || JSON.stringify(e); } catch {}
     throw new Error(msg);
   }
-  return r.json();
+  if (r.status === 204) return null;
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
 }
 
 function today() {
@@ -691,6 +775,7 @@ const TAB_THEME = {
   reports:      { bg: '#f5f3ff', accent: '#5b21b6' },  // violet
   accounts:     { bg: '#fffbeb', accent: '#92400e' },  // amber
   import:       { bg: '#f0fdfa', accent: '#0f766e' },  // teal
+  bank:         { bg: '#f0f9ff', accent: '#0369a1' },  // sky
   ask:          { bg: '#fff1f2', accent: '#9f1239' },  // rose
   settings:     { bg: '#f9fafb', accent: '#374151' },  // gray
 };
@@ -714,6 +799,7 @@ function showTab(name) {
     accounts:     loadAccounts,
     reports:      null,
     import:       loadImportTab,
+    bank:         loadBankFeed,
     ask:          null,
     settings:     loadSettingsTab,
   };
@@ -1397,6 +1483,196 @@ function exportReportCSV() {
   a.click();
 }
 
+// BANK FEED
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function accountOptions(selectedId=null) {
+  return accounts.map(a => `<option value="${a.id}" ${String(a.id)===String(selectedId) ? 'selected' : ''}>${a.code} - ${escapeHtml(a.name)}</option>`).join('');
+}
+
+async function loadBankFeed() {
+  if (!accounts.length) await fetchAccounts();
+  await Promise.all([loadPlaidStatus(), loadPlaidConnections(), loadPlaidPending()]);
+}
+
+async function loadPlaidStatus() {
+  try {
+    const status = await apiFetch('/api/plaid/status');
+    $('plaid-status').textContent = status.configured ? `Configured (${status.env})` : 'Add Plaid credentials in Settings';
+    $('plaid-connection-count').textContent = status.connection_count ?? 0;
+    $('plaid-pending-count').textContent = status.pending_count ?? 0;
+  } catch(e) {
+    $('plaid-status').textContent = 'Plaid unavailable';
+  }
+}
+
+async function connectPlaid() {
+  if (!window.Plaid) { toast('Plaid Link did not load. Check your internet connection.', 'error'); return; }
+  try {
+    const token = await apiFetch('/api/plaid/link-token', {method:'POST'});
+    const handler = Plaid.create({
+      token: token.link_token,
+      onSuccess: async (public_token, metadata) => {
+        try {
+          await apiFetch('/api/plaid/exchange-token', {
+            method:'POST',
+            body: JSON.stringify({
+              public_token,
+              institution_id: metadata.institution?.institution_id || null,
+              institution_name: metadata.institution?.name || null,
+              accounts: metadata.accounts || [],
+            })
+          });
+          toast('Bank connected');
+          await loadBankFeed();
+        } catch(e) { toast(e.message, 'error'); }
+      },
+      onExit: (err) => { if (err) toast(err.display_message || err.error_message || 'Plaid Link closed with an error', 'error'); },
+    });
+    handler.open();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function syncPlaid() {
+  try {
+    const result = await apiFetch('/api/plaid/sync', {method:'POST'});
+    toast(`${result.added_to_queue} transaction(s) added to review`);
+    await loadBankFeed();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function loadPlaidConnections() {
+  const container = $('plaid-connections');
+  try {
+    plaidConnections = await apiFetch('/api/plaid/connections');
+    if (!plaidConnections.length) {
+      container.innerHTML = '<p class="text-gray-500">No connected banks yet.</p>';
+      return;
+    }
+    const blocks = [];
+    for (const conn of plaidConnections) {
+      const plaidAccounts = await apiFetch(`/api/plaid/plaid-accounts/${conn.id}`);
+      const accountRows = plaidAccounts.map(pa => `
+        <div class="flex flex-wrap items-center gap-2 py-2 border-t">
+          <div class="min-w-48 flex-1">
+            <div class="font-medium text-gray-800">${escapeHtml(pa.name)} ${pa.mask ? '...' + escapeHtml(pa.mask) : ''}</div>
+            <div class="text-xs text-gray-500">${escapeHtml(pa.type || '')} ${escapeHtml(pa.subtype || '')}</div>
+          </div>
+          <select id="plaid-map-${pa.id}" class="border rounded px-2 py-1 text-sm min-w-64">
+            <option value="">Choose bookkeeping account</option>
+            ${accountOptions(pa.kb_account_id)}
+          </select>
+          <button onclick="linkPlaidAccount(${conn.id}, '${pa.plaid_account_id}', ${pa.id})" class="bg-gray-800 hover:bg-gray-900 text-white text-xs px-3 py-1.5 rounded">Map</button>
+        </div>`).join('');
+      blocks.push(`
+        <div class="border rounded-lg p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div>
+              <div class="font-semibold text-gray-800">${escapeHtml(conn.institution_name || 'Connected bank')}</div>
+              <div class="text-xs text-gray-500">${conn.account_count} account(s), ${conn.pending_count} pending, last sync ${escapeHtml(conn.last_synced || 'never')}</div>
+            </div>
+            <button onclick="deletePlaidConnection(${conn.id})" class="text-xs px-3 py-1.5 rounded bg-red-50 text-red-700 hover:bg-red-100">Remove</button>
+          </div>
+          ${accountRows || '<p class="text-gray-500 text-sm">No Plaid accounts stored for this connection.</p>'}
+        </div>`);
+    }
+    container.innerHTML = blocks.join('');
+  } catch(e) {
+    container.innerHTML = `<p class="text-red-600">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function linkPlaidAccount(connectionId, plaidAccountId, rowId) {
+  const kbAccountId = $(`plaid-map-${rowId}`).value;
+  if (!kbAccountId) { toast('Choose a bookkeeping account first', 'error'); return; }
+  try {
+    await apiFetch(`/api/plaid/link-accounts/${connectionId}?plaid_account_id=${encodeURIComponent(plaidAccountId)}&kb_account_id=${encodeURIComponent(kbAccountId)}`, {method:'POST'});
+    toast('Account mapped');
+    await loadPlaidConnections();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deletePlaidConnection(connectionId) {
+  if (!confirm('Remove this bank connection? Pending transactions for it will also be removed.')) return;
+  const r = await fetch(`${API_BASE}/api/plaid/connections/${connectionId}`, {method:'DELETE'});
+  if (!r.ok) { toast('Could not remove connection', 'error'); return; }
+  toast('Connection removed');
+  await loadBankFeed();
+}
+
+async function loadPlaidPending() {
+  const tbody = $('plaid-pending-body');
+  const status = $('plaid-status-filter').value;
+  try {
+    const rows = await apiFetch(`/api/plaid/pending?status=${encodeURIComponent(status)}&limit=100`);
+    $('plaid-pending-count').textContent = status === 'pending' ? rows.length : $('plaid-pending-count').textContent;
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">No transactions in this queue.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(tx => {
+      const disabled = tx.status !== 'pending' ? 'disabled' : '';
+      return `<tr>
+        <td class="px-4 py-2 whitespace-nowrap">${escapeHtml(tx.date)}</td>
+        <td class="px-4 py-2">
+          <div class="font-medium text-gray-800">${escapeHtml(tx.merchant_name || tx.description)}</div>
+          <div class="text-xs text-gray-500">${escapeHtml(tx.institution_name || '')}</div>
+        </td>
+        <td class="px-4 py-2 text-right font-medium">${fmtPlain(-tx.amount)}</td>
+        <td class="px-4 py-2">
+          <div class="flex flex-col gap-1 min-w-56">
+            <select id="plaid-post-account-${tx.id}" class="border rounded px-2 py-1 text-sm" ${disabled}>${accountOptions(tx.suggested_account_id)}</select>
+            <select id="plaid-post-dba-${tx.id}" class="border rounded px-2 py-1 text-sm" ${disabled}>
+              ${['carwash','laundromat','shared','both'].map(d => `<option value="${d}" ${d===tx.suggested_dba ? 'selected' : ''}>${d}</option>`).join('')}
+            </select>
+            <span class="text-xs text-gray-500">Confidence: ${escapeHtml(tx.suggested_confidence || 'low')}</span>
+          </div>
+        </td>
+        <td class="px-4 py-2">
+          <div class="flex flex-wrap gap-1">
+            <button onclick="postPlaidTransaction(${tx.id})" class="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded" ${disabled}>Post</button>
+            <button onclick="suggestPlaidTransaction(${tx.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded" ${disabled}>AI Suggest</button>
+            <button onclick="skipPlaidTransaction(${tx.id})" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded" ${disabled}>Skip</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-600">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function postPlaidTransaction(id) {
+  const accountId = $(`plaid-post-account-${id}`).value;
+  const dba = $(`plaid-post-dba-${id}`).value;
+  if (!accountId) { toast('Choose an account before posting', 'error'); return; }
+  try {
+    await apiFetch(`/api/plaid/post/${id}`, {method:'POST', body:JSON.stringify({account_id: parseInt(accountId), dba})});
+    toast('Transaction posted');
+    await loadBankFeed();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function suggestPlaidTransaction(id) {
+  try {
+    await apiFetch(`/api/plaid/suggest/${id}`, {method:'POST', body:JSON.stringify({use_ai:true})});
+    toast('Suggestion refreshed');
+    await loadPlaidPending();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function skipPlaidTransaction(id) {
+  const r = await fetch(`${API_BASE}/api/plaid/skip/${id}`, {method:'POST'});
+  if (!r.ok) { toast('Could not skip transaction', 'error'); return; }
+  toast('Transaction skipped');
+  await loadBankFeed();
+}
 // ═══════════════ IMPORT ═══════════════
 function loadImportTab() {
   // Populate account select (idempotent)
@@ -1448,7 +1724,6 @@ async function processCSVFile(f) {
       preview.classList.remove('hidden');
     }
   } catch {}
-  await loadDriveStatus();
 }
 
 async function doImport() {
@@ -1528,6 +1803,39 @@ async function saveApiKey() {
   }
 }
 
+async function savePlaidSettings() {
+  const clientId = $('settings-plaid-client-id').value.trim();
+  const secret = $('settings-plaid-secret').value.trim();
+  const env = $('settings-plaid-env').value;
+  try {
+    if (clientId) await apiFetch('/api/settings/plaid_client_id', {method:'POST', body:JSON.stringify({value:clientId})});
+    if (secret) await apiFetch('/api/settings/plaid_secret', {method:'POST', body:JSON.stringify({value:secret})});
+    await apiFetch('/api/settings/plaid_env', {method:'POST', body:JSON.stringify({value:env})});
+    $('settings-plaid-secret').value = '';
+    $('plaid-settings-status').textContent = 'Plaid settings saved.';
+    $('plaid-settings-status').className = 'text-xs mt-2 text-green-600';
+    toast('Plaid settings saved');
+  } catch(e) {
+    $('plaid-settings-status').textContent = 'Error: ' + e.message;
+    $('plaid-settings-status').className = 'text-xs mt-2 text-red-500';
+  }
+}
+
+async function loadPlaidSettings() {
+  try {
+    const [clientId, secret, env] = await Promise.all([
+      apiFetch('/api/settings/plaid_client_id'),
+      apiFetch('/api/settings/plaid_secret'),
+      apiFetch('/api/settings/plaid_env'),
+    ]);
+    if (clientId.value) $('settings-plaid-client-id').value = clientId.value;
+    if (env.value) $('settings-plaid-env').value = env.value;
+    if (secret.value) {
+      $('plaid-settings-status').textContent = 'Plaid secret is saved in database.';
+      $('plaid-settings-status').className = 'text-xs mt-2 text-green-600';
+    }
+  } catch {}
+}
 async function loadSettingsTab() {
   try {
     const [provider, model, key, baseUrl] = await Promise.all([
@@ -1544,6 +1852,8 @@ async function loadSettingsTab() {
       $('api-key-status').className = 'text-xs mt-2 text-green-600';
     }
   } catch {}
+  await loadPlaidSettings();
+  await loadDriveStatus();
 }
 
 function saveApiUrl() {
@@ -1655,3 +1965,16 @@ init();
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+

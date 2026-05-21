@@ -134,6 +134,19 @@ Standard double-entry bookkeeping:
 
 ---
 
+## Bank Feed
+
+KerseyBooks includes a Plaid-powered bank feed for low-cost transaction automation.
+
+1. Add `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV` in `.env`, or save them in Settings under **Plaid Bank Feed**.
+2. Open **Bank Feed** and click **Connect Bank**.
+3. Map each connected Plaid account to the matching bookkeeping account, usually Checking Account `1000`.
+4. Click **Sync** to pull new bank activity into the pending review queue.
+5. Review each pending transaction, adjust account/DBA if needed, then **Post** it to create a balanced journal entry.
+
+Pending Plaid transactions do not affect reports until they are posted.
+
+---
 ## Backup
 
 The `.db` file **is** the backup. Download it anytime:
@@ -175,3 +188,5 @@ Date, Description, Amount
 ```
 
 Date formats accepted: `MM/DD/YYYY`, `YYYY-MM-DD`, `MM/DD/YY`
+
+

@@ -51,6 +51,45 @@ def _plaid_client():
     return plaid_api.PlaidApi(ApiClient(cfg))
 
 
+
+def _setting(db: sqlite3.Connection, key: str) -> Optional[str]:
+    row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    if row and row["value"]:
+        return row["value"]
+    return None
+
+
+def _plaid_config(db: sqlite3.Connection) -> dict:
+    return {
+        "client_id": _setting(db, "plaid_client_id") or os.getenv("PLAID_CLIENT_ID", ""),
+        "secret": _setting(db, "plaid_secret") or os.getenv("PLAID_SECRET", ""),
+        "env": (_setting(db, "plaid_env") or os.getenv("PLAID_ENV", "sandbox")).lower(),
+    }
+
+
+def _plaid_client_for_db(db: sqlite3.Connection):
+    try:
+        import plaid
+        from plaid.api import plaid_api
+        from plaid.configuration import Configuration
+        from plaid.api_client import ApiClient
+    except ImportError:
+        raise HTTPException(503, "plaid-python is not installed")
+
+    cfg_values = _plaid_config(db)
+    if not cfg_values["client_id"] or not cfg_values["secret"]:
+        raise HTTPException(503, "Plaid credentials are not configured")
+
+    host = {
+        "production": plaid.Environment.Production,
+        "development": plaid.Environment.Development,
+    }.get(cfg_values["env"], plaid.Environment.Sandbox)
+    cfg = Configuration(
+        host=host,
+        api_key={"clientId": cfg_values["client_id"], "secret": cfg_values["secret"]},
+    )
+    return plaid_api.PlaidApi(ApiClient(cfg))
+
 # ── Rule-based auto-categorization ─────────────────────────────────────────
 
 # Keyword lists tuned for a small car-wash / laundromat operation
@@ -149,15 +188,29 @@ async def _ai_suggest(description: str, merchant: str, amount: float,
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
+@router.get("/status")
+def plaid_status(db: sqlite3.Connection = Depends(get_db)):
+    cfg = _plaid_config(db)
+    connection_count = db.execute("SELECT COUNT(*) FROM plaid_connections").fetchone()[0]
+    pending_count = db.execute(
+        "SELECT COUNT(*) FROM plaid_pending WHERE status = 'pending'"
+    ).fetchone()[0]
+    return {
+        "configured": bool(cfg["client_id"] and cfg["secret"]),
+        "env": cfg["env"],
+        "connection_count": connection_count,
+        "pending_count": pending_count,
+    }
+
 @router.post("/link-token")
-def create_link_token():
+def create_link_token(db: sqlite3.Connection = Depends(get_db)):
     """Create a short-lived Plaid Link token for the frontend widget."""
     from plaid.model.link_token_create_request import LinkTokenCreateRequest
     from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
     from plaid.model.products import Products
     from plaid.model.country_code import CountryCode
 
-    client = _plaid_client()
+    client = _plaid_client_for_db(db)
     request = LinkTokenCreateRequest(
         products=[Products("transactions")],
         client_name="KerseyBooks",
@@ -181,7 +234,7 @@ def exchange_token(body: ExchangeTokenBody, db: sqlite3.Connection = Depends(get
     """Exchange one-time public_token for a durable access_token."""
     from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
 
-    client = _plaid_client()
+    client = _plaid_client_for_db(db)
     req  = ItemPublicTokenExchangeRequest(public_token=body.public_token)
     resp = client.item_public_token_exchange(req)
 
@@ -242,6 +295,8 @@ def delete_connection(connection_id: int, db: sqlite3.Connection = Depends(get_d
     row = db.execute("SELECT id FROM plaid_connections WHERE id=?", (connection_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Connection not found")
+    db.execute("DELETE FROM plaid_pending WHERE connection_id=? AND status='pending'", (connection_id,))
+    db.execute("DELETE FROM plaid_accounts WHERE connection_id=?", (connection_id,))
     db.execute("DELETE FROM plaid_connections WHERE id=?", (connection_id,))
     db.commit()
 
@@ -254,7 +309,7 @@ def sync_transactions(
     """Pull new transactions from Plaid and stage them for review."""
     from plaid.model.transactions_sync_request import TransactionsSyncRequest
 
-    client   = _plaid_client()
+    client   = _plaid_client_for_db(db)
     accounts = [dict(r) for r in db.execute("SELECT id, code, name, type FROM accounts").fetchall()]
 
     if connection_id:
@@ -467,3 +522,7 @@ def get_plaid_accounts(connection_id: int, db: sqlite3.Connection = Depends(get_
         (connection_id,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+
+

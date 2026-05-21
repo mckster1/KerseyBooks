@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import sqlite3
 
 from .database import init_db, get_db, DB_PATH
-from .routers import accounts, journal_entries, reports, imports, ask, settings, google_drive
+from .routers import accounts, journal_entries, reports, imports, ask, settings, google_drive, plaid_integration
 
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
@@ -78,6 +78,7 @@ app.include_router(imports.router)
 app.include_router(ask.router)
 app.include_router(settings.router)
 app.include_router(google_drive.router)
+app.include_router(plaid_integration.router)
 
 
 @app.on_event("startup")
@@ -117,3 +118,5 @@ def health():
 _dashboard = Path(__file__).parent.parent.parent / "dashboard"
 if _dashboard.exists():
     app.mount("/", StaticFiles(directory=str(_dashboard), html=True), name="dashboard")
+
+
