@@ -8,12 +8,20 @@ Replaces Patriot Software. Built on FastAPI + SQLite. No cloud, no subscription.
 
 ## Quick Start (Windows)
 
+Double-click:
+
+```text
+Launch KerseyBooks.bat
+```
+
+Or run manually:
+
 ```powershell
 cd C:\Users\Name\Desktop\KerseyBooks
 .\scripts\start.ps1
 ```
 
-Then open **http://localhost:8001** in your browser.
+The batch launcher starts the backend and opens **http://localhost:8001** in your browser.
 
 On first run the script will:
 1. Copy `.env.example` → `.env`
