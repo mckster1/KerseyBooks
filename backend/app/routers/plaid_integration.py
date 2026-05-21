@@ -42,10 +42,7 @@ def _plaid_client():
     if not client_id or not secret:
         raise HTTPException(503, "PLAID_CLIENT_ID and PLAID_SECRET must be set in .env")
 
-    host = {
-        "production":  plaid.Environment.Production,
-        "development": plaid.Environment.Development,
-    }.get(env, plaid.Environment.Sandbox)
+    host = plaid.Environment.Production if env == "production" else plaid.Environment.Sandbox
 
     cfg = Configuration(host=host, api_key={"clientId": client_id, "secret": secret})
     return plaid_api.PlaidApi(ApiClient(cfg))
@@ -80,10 +77,7 @@ def _plaid_client_for_db(db: sqlite3.Connection):
     if not cfg_values["client_id"] or not cfg_values["secret"]:
         raise HTTPException(503, "Plaid credentials are not configured")
 
-    host = {
-        "production": plaid.Environment.Production,
-        "development": plaid.Environment.Development,
-    }.get(cfg_values["env"], plaid.Environment.Sandbox)
+    host = plaid.Environment.Production if cfg_values["env"] == "production" else plaid.Environment.Sandbox
     cfg = Configuration(
         host=host,
         api_key={"clientId": cfg_values["client_id"], "secret": cfg_values["secret"]},

@@ -38,6 +38,17 @@ def _client_config(db: sqlite3.Connection) -> dict:
             503,
             "Google Drive OAuth is not configured. Add Google client ID and secret in Settings.",
         )
+    if "@" in client_id or client_id.endswith("@gmail.com"):
+        raise HTTPException(
+            400,
+            "Google client ID must be an OAuth Client ID from Google Cloud, not an email address. "
+            "You will choose the Drive account during Google sign-in.",
+        )
+    if " " in client_secret.strip():
+        raise HTTPException(
+            400,
+            "Google client secret must be an OAuth client secret from Google Cloud, not a Gmail app password.",
+        )
     return {
         "web": {
             "client_id": client_id,

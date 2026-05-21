@@ -2,9 +2,12 @@ import sqlite3
 import os
 from pathlib import Path
 
-# DB path: env override, else sibling of backend/ named kersey.db
-_DEFAULT_DB = str(Path(__file__).parent.parent.parent / "kersey.db")
-DB_PATH = os.getenv("DB_PATH", _DEFAULT_DB)
+# DB path: env override, else repo-root kersey.db. Relative DB_PATH values are
+# resolved from the repo root so launch location does not create a second DB.
+_ROOT = Path(__file__).parent.parent.parent
+_DEFAULT_DB = _ROOT / "kersey.db"
+_ENV_DB = os.getenv("DB_PATH")
+DB_PATH = str((_ROOT / _ENV_DB).resolve() if _ENV_DB and not Path(_ENV_DB).is_absolute() else Path(_ENV_DB or _DEFAULT_DB).resolve())
 
 
 def get_connection() -> sqlite3.Connection:
