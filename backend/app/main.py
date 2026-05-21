@@ -3,14 +3,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import sqlite3
 
-from .database import init_db, get_db, DB_PATH
-from .routers import accounts, journal_entries, reports, imports, ask, settings, google_drive, plaid_integration
+from .database import init_db, DB_PATH
+from .routers import accounts, journal_entries, reports, imports, ask, settings, backup, plaid_integration
 
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +76,7 @@ app.include_router(reports.router)
 app.include_router(imports.router)
 app.include_router(ask.router)
 app.include_router(settings.router)
-app.include_router(google_drive.router)
+app.include_router(backup.router)
 app.include_router(plaid_integration.router)
 
 
@@ -90,23 +89,6 @@ def startup():
     seed_accounts(conn)
     conn.close()
     print(f"[OK] KerseyBooks running -- DB: {DB_PATH}")
-
-
-@app.get("/api/backup")
-def download_backup():
-    if not Path(DB_PATH).exists():
-        raise HTTPException(404, "Database file not found")
-    # Flush the WAL into the main .db file so the downloaded copy is complete
-    _conn = sqlite3.connect(DB_PATH)
-    try:
-        _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    finally:
-        _conn.close()
-    return FileResponse(
-        path=DB_PATH,
-        filename="kersey_backup.db",
-        media_type="application/octet-stream",
-    )
 
 
 @app.get("/api/health")

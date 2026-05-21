@@ -59,9 +59,6 @@ cd backend
 | `LLM_API_KEY` | *(empty)* | Required for Ask AI and AI-assisted Plaid suggestions |
 | `LLM_BASE_URL` | OpenAI default | Optional base URL for OpenAI-compatible providers |
 | `CORS_ORIGINS` | `http://localhost:8001` | Allowed CORS origins |
-| `GOOGLE_CLIENT_ID` | *(empty)* | Optional Google OAuth client ID for Drive backups |
-| `GOOGLE_CLIENT_SECRET` | *(empty)* | Optional Google OAuth client secret for Drive backups |
-| `GOOGLE_DRIVE_FOLDER_ID` | *(empty)* | Optional folder ID where database backups are uploaded |
 
 ---
 
@@ -157,7 +154,7 @@ Pending Plaid transactions do not affect reports until they are posted.
 ---
 ## Backup
 
-The `.db` file **is** the backup. Download it anytime:
+The `.db` file **is** the backup. Download or copy it anytime:
 
 - Click **Backup DB** in the header
 - Or: `GET http://localhost:8001/api/backup`
@@ -165,19 +162,17 @@ The `.db` file **is** the backup. Download it anytime:
 
 The database is excluded from git. Keep regular copies.
 
-### Google Drive Backup
+### Google Drive For Desktop Backup
 
-KerseyBooks can connect directly to a user's own Google Drive account and upload
-`kersey_backup.db`.
+The simplest cloud backup is to use Google Drive for desktop:
 
-1. Create OAuth credentials in Google Cloud for a web application.
-2. Add this authorized redirect URI:
-   `http://localhost:8001/api/google-drive/callback`
-3. In KerseyBooks Settings, save the Google client ID and client secret.
-4. Click **Connect Google Drive** and sign in to the account that should receive backups.
-5. Click **Upload to Google Drive**.
+1. Install Google Drive for desktop and sign in to the Drive account that should hold backups.
+2. Create a folder such as `KerseyBooks Backups` inside the synced Drive folder.
+3. In KerseyBooks Settings, paste that folder path into **Database Backup**.
+4. Click **Copy to Backup Folder**.
 
-Set `GOOGLE_DRIVE_FOLDER_ID` or the Settings folder field to upload into a specific Drive folder.
+KerseyBooks will create timestamped files like `kersey_backup_20260521_143000.db`.
+Google Drive for desktop handles the upload and sharing.
 
 ---
 

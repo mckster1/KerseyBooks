@@ -533,22 +533,18 @@
       <p id="plaid-settings-status" class="text-xs mt-2 text-gray-500"></p>
     </div>    <div class="bg-white rounded-xl shadow p-5">
       <h3 class="font-semibold text-gray-700 mb-3">Database Backup</h3>
-      <p class="text-sm text-gray-500 mb-3">Download your database or connect Google Drive to upload it directly. Use a Google Cloud OAuth client ID/secret here, then sign in as the Drive account you want.</p>
+      <p class="text-sm text-gray-500 mb-3">Download the database or copy it to a folder that Google Drive for desktop is already syncing.</p>
       <div class="flex flex-wrap gap-2">
         <button onclick="downloadBackup()" class="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded">Download Backup</button>
-        <button onclick="uploadBackupToDrive()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Upload to Google Drive</button>
-        <button onclick="connectGoogleDrive()" class="bg-slate-700 hover:bg-slate-800 text-white text-sm px-4 py-2 rounded">Connect Google Drive</button>
-        <button onclick="disconnectGoogleDrive()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-4 py-2 rounded">Disconnect</button>
+        <button onclick="copyBackupToFolder()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Copy to Backup Folder</button>
       </div>
-      <div class="grid gap-2 sm:grid-cols-2 mt-3">
-        <input type="text" id="settings-google-client-id" placeholder="OAuth client ID, not an email address" class="border rounded px-3 py-2 text-sm">
-        <input type="password" id="settings-google-client-secret" placeholder="OAuth client secret, not an app password" class="border rounded px-3 py-2 text-sm">
-        <input type="text" id="settings-google-folder-id" placeholder="Optional Drive folder ID, not folder name" class="border rounded px-3 py-2 text-sm sm:col-span-2">
+      <div class="mt-3">
+        <input type="text" id="settings-backup-folder" placeholder="Example: C:\Users\Name\Google Drive\KerseyBooks Backups" class="w-full border rounded px-3 py-2 text-sm">
       </div>
-      <div class="mt-2">
-        <button onclick="saveGoogleDriveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save Drive Settings</button>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button onclick="saveBackupFolder()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">Save Backup Folder</button>
       </div>
-      <p id="drive-status" class="text-xs text-gray-500 mt-2"></p>
+      <p id="backup-folder-status" class="text-xs text-gray-500 mt-2"></p>
     </div>
     <div class="bg-white rounded-xl shadow p-5">
       <h3 class="font-semibold text-gray-700 mb-3">API Base URL</h3>
@@ -1853,7 +1849,7 @@ async function loadSettingsTab() {
     }
   } catch {}
   await loadPlaidSettings();
-  await loadDriveStatus();
+  await loadBackupFolderStatus();
 }
 
 function saveApiUrl() {
@@ -1867,67 +1863,42 @@ function downloadBackup() {
   window.open(`${API_BASE}/api/backup`, '_blank');
 }
 
-async function saveGoogleDriveSettings() {
-  const clientId = $('settings-google-client-id').value.trim();
-  const clientSecret = $('settings-google-client-secret').value.trim();
-  const folderId = $('settings-google-folder-id').value.trim();
+async function saveBackupFolder() {
+  const folderPath = $('settings-backup-folder').value.trim();
   try {
-    if (clientId) await apiFetch('/api/settings/google_client_id', {method:'POST', body:JSON.stringify({value:clientId})});
-    if (clientSecret) await apiFetch('/api/settings/google_client_secret', {method:'POST', body:JSON.stringify({value:clientSecret})});
-    if (folderId) await apiFetch('/api/settings/google_drive_folder_id', {method:'POST', body:JSON.stringify({value:folderId})});
-    $('settings-google-client-secret').value = '';
-    toast('Google Drive settings saved');
-    await loadDriveStatus();
+    await apiFetch('/api/settings/backup_folder_path', {method:'POST', body:JSON.stringify({value:folderPath})});
+    toast('Backup folder saved');
+    await loadBackupFolderStatus();
   } catch(e) {
     toast(e.message, 'error');
   }
 }
 
-async function connectGoogleDrive() {
+async function copyBackupToFolder() {
   try {
-    const data = await apiFetch('/api/google-drive/auth-url');
-    window.open(data.auth_url, '_blank');
-    $('drive-status').textContent = `Finish Google sign-in, then return here. Redirect URI: ${data.redirect_uri}`;
+    $('backup-folder-status').textContent = 'Copying backup...';
+    const data = await apiFetch('/api/backup/folder', {method:'POST'});
+    $('backup-folder-status').textContent = `Backup copied: ${data.file_path}`;
+    toast('Backup copied to folder');
   } catch(e) {
+    $('backup-folder-status').textContent = 'Error: ' + e.message;
     toast(e.message, 'error');
   }
 }
 
-async function disconnectGoogleDrive() {
+async function loadBackupFolderStatus() {
   try {
-    await apiFetch('/api/google-drive/connection', {method:'DELETE'});
-    toast('Google Drive disconnected');
-    await loadDriveStatus();
-  } catch(e) {
-    toast(e.message, 'error');
-  }
-}
-
-async function uploadBackupToDrive() {
-  try {
-    $('drive-status').textContent = 'Uploading backup...';
-    const data = await apiFetch('/api/google-drive/backup', {method:'POST'});
-    $('drive-status').innerHTML = `Backup uploaded: <a class="text-blue-600 underline" href="${data.url}" target="_blank">${data.name}</a>`;
-    toast('Backup uploaded to Google Drive');
-  } catch(e) {
-    $('drive-status').textContent = 'Error: ' + e.message;
-    toast(e.message, 'error');
-  }
-}
-
-async function loadDriveStatus() {
-  try {
-    const data = await apiFetch('/api/google-drive/status');
-    $('settings-google-folder-id').value = data.folder_id || '';
+    const data = await apiFetch('/api/backup/folder/status');
+    $('settings-backup-folder').value = data.folder_path || '';
     if (!data.configured) {
-      $('drive-status').textContent = 'Google Drive is not configured yet. Save OAuth client ID and secret first.';
-    } else if (data.connected) {
-      $('drive-status').textContent = `Connected to Google Drive${data.email ? ': ' + data.email : ''}`;
+      $('backup-folder-status').textContent = 'Choose the folder that Google Drive for desktop is syncing.';
+    } else if (data.exists) {
+      $('backup-folder-status').textContent = 'Backup folder is ready.';
     } else {
-      $('drive-status').textContent = 'Google Drive is configured but not connected.';
+      $('backup-folder-status').textContent = 'Folder will be created the next time you copy a backup.';
     }
   } catch(e) {
-    $('drive-status').textContent = 'Google Drive status unavailable.';
+    $('backup-folder-status').textContent = 'Backup folder status unavailable.';
   }
 }
 
